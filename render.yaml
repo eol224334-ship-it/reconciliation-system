@@ -9,9 +9,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: DB_PATH
-        value: /data/reconciliation.db
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
