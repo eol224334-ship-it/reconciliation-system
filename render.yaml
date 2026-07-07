@@ -1,0 +1,20 @@
+# Render Blueprint Configuration
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: reconciliation-system
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DB_PATH
+        value: /data/reconciliation.db
+      - key: UPLOAD_DIR
+        value: /data/uploads
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

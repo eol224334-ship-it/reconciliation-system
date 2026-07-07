@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.env
+reconciliation.db
+static/uploads/*
+!static/uploads/.gitkeep
+gh_cli.zip
+gh_cli_dir/
+.gh_config/
+*.db-journal

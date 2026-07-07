@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>财务对账系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.6/dist/index.css">
+  <link rel="stylesheet" href="https://unpkg.com/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #f0f2f5; --bg-card: #ffffff; --bg-sidebar: #001529; --bg-sidebar-active: #1677ff;
+      --text-primary: #1f2937; --text-secondary: #6b7280; --text-light: #9ca3af; --border-color: #e5e7eb;
+      --color-primary: #1677ff; --color-success: #52c41a; --color-warning: #faad14; --color-danger: #ff4d4f; --color-purple: #722ed1;
+      --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+      --radius: 8px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg-primary); color: var(--text-primary); font-size: 14px; line-height: 1.6; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: var(--bg-sidebar); color: #fff; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; transition: transform 0.3s; }
+    .sidebar-logo { height: 60px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .sidebar-logo i { font-size: 24px; color: var(--color-primary); }
+    .sidebar-logo span { font-size: 16px; font-weight: 600; white-space: nowrap; }
+    .sidebar-menu { flex: 1; padding: 12px 0; overflow-y: auto; }
+    .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: rgba(255,255,255,0.65); cursor: pointer; transition: all 0.2s; border-left: 3px solid transparent; }
+    .sidebar-item:hover { color: #fff; background: rgba(255,255,255,0.06); }
+    .sidebar-item.active { color: #fff; background: rgba(22,119,255,0.15); border-left-color: var(--color-primary); }
+    .sidebar-item i { font-size: 16px; width: 20px; text-align: center; }
+    .sidebar-footer { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: rgba(255,255,255,0.35); }
+    .main-area { flex: 1; margin-left: 220px; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar { height: 60px; background: #fff; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
+    .topbar-title { font-size: 18px; font-weight: 600; }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+    .topbar-user { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+    .topbar-user .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+    .content { padding: 24px; flex: 1; }
+    .card { background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { font-size: 15px; font-weight: 600; }
+    .card-body { padding: 20px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border-radius: var(--radius); padding: 20px; position: relative; overflow: hidden; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); }
+    .stat-card .stat-icon { position: absolute; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .stat-card .stat-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+    .stat-card .stat-value { font-size: 26px; font-weight: 700; }
+    .stat-card .stat-sub { font-size: 12px; color: var(--text-light); margin-top: 6px; }
+    .stat-card.primary .stat-icon { background: #e6f4ff; color: var(--color-primary); } .stat-card.primary .stat-value { color: var(--color-primary); }
+    .stat-card.warning .stat-icon { background: #fffbe6; color: var(--color-warning); } .stat-card.warning .stat-value { color: var(--color-warning); }
+    .stat-card.danger .stat-icon { background: #fff2f0; color: var(--color-danger); } .stat-card.danger .stat-value { color: var(--color-danger); }
+    .stat-card.purple .stat-icon { background: #f9f0ff; color: var(--color-purple); } .stat-card.purple .stat-value { color: var(--color-purple); }
+    .dist-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .status-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+    .status-row:last-child { border-bottom: none; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.info { background: #d9d9d9; } .status-dot.warning { background: var(--color-warning); } .status-dot.success { background: var(--color-success); }
+    .status-row .status-label { flex: 1; font-size: 13px; color: var(--text-secondary); }
+    .status-row .status-count { font-size: 20px; font-weight: 700; }
+    .filter-bar { background: #fff; padding: 16px 20px; border-radius: var(--radius) var(--radius) 0 0; border: 1px solid var(--border-color); border-bottom: none; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .table-wrap { background: #fff; border-radius: 0 0 var(--radius) var(--radius); border: 1px solid var(--border-color); overflow: hidden; }
+    .el-table { font-size: 13px; }
+    .amount { font-family: "SF Mono", "Consolas", monospace; font-size: 12px; }
+    .amount.pos { color: var(--color-success); font-weight: 600; } .amount.neg { color: var(--color-danger); font-weight: 600; }
+    .amount.total { font-size: 13px; font-weight: 700; } .amount.purple { color: var(--color-purple); font-weight: 600; }
+    .proof-thumb { width: 36px; height: 36px; border-radius: 6px; cursor: pointer; object-fit: cover; border: 1px solid var(--border-color); }
+    .proof-empty { width: 36px; height: 36px; border-radius: 6px; background: #f5f7fa; display: flex; align-items: center; justify-content: center; color: #c0c4cc; font-size: 11px; border: 1px dashed #dcdfe6; }
+    .column-popover { padding: 12px !important; }
+    .column-popover .el-checkbox { margin-right: 8px !important; margin-bottom: 6px; }
+    .dialog-info-box { background: #f0f5ff; border: 1px solid #adc6ff; border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; }
+    .dialog-info-box .row { display: flex; gap: 16px; font-size: 13px; margin-bottom: 4px; }
+    .dialog-info-box .row:last-child { margin-bottom: 0; }
+    .dialog-warn-box { background: #fffbe6; border: 1px solid #ffe58f; border-radius: var(--radius); padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: #ad6800; display: flex; align-items: center; gap: 8px; }
+    .upload-zone { border: 2px dashed #d9d9d9; border-radius: var(--radius); padding: 16px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; outline: none; background: #fafafa; }
+    .upload-zone:hover, .upload-zone:focus { border-color: var(--color-primary); background: #f0f5ff; }
+    .upload-zone i { font-size: 24px; color: var(--text-light); margin-bottom: 6px; }
+    .upload-zone p { font-size: 13px; color: var(--text-secondary); margin-bottom: 2px; }
+    .upload-zone .upload-tip { font-size: 11px; color: var(--text-light); }
+    .upload-preview-wrap { position: relative; display: inline-block; }
+    .upload-preview-wrap img { width: 100px; height: 100px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border-color); }
+    .upload-preview-wrap .remove-btn { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; background: var(--color-danger); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; }
+    .menu-toggle { display: none; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-primary); }
+    @media (max-width: 1200px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } .dist-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main-area { margin-left: 0; } .menu-toggle { display: block; } .stat-grid { grid-template-columns: 1fr; } .content { padding: 16px; } }
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; } .fade-enter-from, .fade-leave-to { opacity: 0; }
+    .sync-badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; display: flex; align-items: center; gap: 4px; }
+    .sync-badge.synced { background: #f6ffed; color: var(--color-success); }
+    .sync-badge.syncing { background: #e6f4ff; color: var(--color-primary); }
+    .sync-badge.error { background: #fff2f0; color: var(--color-danger); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="layout">
+    <div class="sidebar" :class="{open: sidebarOpen}">
+      <div class="sidebar-logo"><i class="fas fa-coins"></i><span>财务对账系统</span></div>
+      <div class="sidebar-menu">
+        <div class="sidebar-item" :class="{active: tab==='dashboard'}" @click="switchTab('dashboard')"><i class="fas fa-chart-pie"></i><span>财务看板</span></div>
+        <div class="sidebar-item" :class="{active: tab==='ledgers'}" @click="switchTab('ledgers')"><i class="fas fa-table-list"></i><span>对账流水</span></div>
+        <div class="sidebar-item" :class="{active: tab==='rates'}" @click="switchTab('rates')"><i class="fas fa-exchange-alt"></i><span>汇率管理</span></div>
+        <div class="sidebar-item" :class="{active: tab==='audit'}" @click="switchTab('audit')"><i class="fas fa-shield-halved"></i><span>审计日志</span></div>
+      </div>
+      <div class="sidebar-footer"><div>v3.0 Cloud</div><div style="margin-top:4px">云端共享版</div></div>
+    </div>
+    <div class="main-area">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="menu-toggle" @click="sidebarOpen=!sidebarOpen"><i class="fas fa-bars"></i></button>
+          <span class="topbar-title">{{ pageTitle }}</span>
+        </div>
+        <div class="topbar-actions">
+          <div :class="'sync-badge ' + syncStatus" v-if="syncStatus">
+            <i :class="syncStatus === 'syncing' ? 'fas fa-spinner fa-spin' : syncStatus === 'synced' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+            {{ syncStatusText }}
+          </div>
+          <el-button text @click="refreshData"><i class="fas fa-rotate"></i> 刷新</el-button>
+          <div class="topbar-user"><div class="avatar">A</div><span>Admin</span></div>
+        </div>
+      </div>
+      <div class="content">
+        <transition name="fade" mode="out-in">
+        <!-- Dashboard -->
+        <div v-if="tab==='dashboard'" key="dashboard">
+          <div class="stat-grid">
+            <div class="stat-card primary"><div class="stat-icon"><i class="fas fa-arrow-down-to-line"></i></div><div class="stat-label">应收总额 (客户未付)</div><div class="stat-value">{{ fmt(summary.total_receivable) }}</div><div class="stat-sub">IDR &asymp; &yen; {{ fmt(summary.total_receivable_cny, 2) }} CNY</div></div>
+            <div class="stat-card warning"><div class="stat-icon"><i class="fas fa-arrow-up-from-line"></i></div><div class="stat-label">应付总额 (未付FO)</div><div class="stat-value">{{ fmt(summary.total_payable) }}</div><div class="stat-sub">IDR &asymp; &yen; {{ fmt(summary.total_payable_cny, 2) }} CNY</div></div>
+            <div class="stat-card danger"><div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-label">逾期应收</div><div class="stat-value">{{ fmt(summary.overdue_ar) }}</div><div class="stat-sub">客户超期未付</div></div>
+            <div class="stat-card purple"><div class="stat-icon"><i class="fas fa-database"></i></div><div class="stat-label">流水总数</div><div class="stat-value">{{ summary.total_records || 0 }}</div><div class="stat-sub">总记录数</div></div>
+          </div>
+          <div class="dist-grid">
+            <div class="card"><div class="card-header"><h3><i class="fas fa-arrow-down-to-line" style="color:var(--color-primary);margin-right:8px;"></i>应收账款 (AR) 状态</h3></div><div class="card-body" style="padding:12px 20px;">
+              <div class="status-row"><div class="status-dot info"></div><div class="status-label">待核销</div><div class="status-count" style="color:#909399">{{ summary.ar_status_counts?.pending || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot warning"></div><div class="status-label">部分收款</div><div class="status-count" style="color:var(--color-warning)">{{ summary.ar_status_counts?.partial || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot success"></div><div class="status-label">已清算</div><div class="status-count" style="color:var(--color-success)">{{ summary.ar_status_counts?.settled || 0 }}</div></div>
+            </div></div>
+            <div class="card"><div class="card-header"><h3><i class="fas fa-box" style="color:var(--color-warning);margin-right:8px;"></i>货值付款 (AP) 状态</h3></div><div class="card-body" style="padding:12px 20px;">
+              <div class="status-row"><div class="status-dot info"></div><div class="status-label">待付款</div><div class="status-count" style="color:#909399">{{ summary.product_ap_counts?.pending || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot warning"></div><div class="status-label">部分付款</div><div class="status-count" style="color:var(--color-warning)">{{ summary.product_ap_counts?.partial || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot success"></div><div class="status-label">已结清</div><div class="status-count" style="color:var(--color-success)">{{ summary.product_ap_counts?.settled || 0 }}</div></div>
+            </div></div>
+            <div class="card"><div class="card-header"><h3><i class="fas fa-hand-holding-dollar" style="color:var(--color-purple);margin-right:8px;"></i>佣金付款 (AP) 状态</h3></div><div class="card-body" style="padding:12px 20px;">
+              <div class="status-row"><div class="status-dot info"></div><div class="status-label">待付款</div><div class="status-count" style="color:#909399">{{ summary.commission_ap_counts?.pending || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot warning"></div><div class="status-label">部分付款</div><div class="status-count" style="color:var(--color-warning)">{{ summary.commission_ap_counts?.partial || 0 }}</div></div>
+              <div class="status-row"><div class="status-dot success"></div><div class="status-label">已结清</div><div class="status-count" style="color:var(--color-success)">{{ summary.commission_ap_counts?.settled || 0 }}</div></div>
+            </div></div>
+          </div>
+          <div class="card"><div class="card-header"><h3><i class="fas fa-bolt" style="color:var(--color-primary);margin-right:8px;"></i>快速操作</h3></div><div class="card-body" style="display:flex;gap:12px;">
+            <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>新增流水</el-button>
+            <el-button @click="switchTab('ledgers')"><i class="fas fa-table-list" style="margin-right:4px;"></i>查看明细</el-button>
+            <el-button @click="switchTab('rates')"><i class="fas fa-exchange-alt" style="margin-right:4px;"></i>管理汇率</el-button>
+          </div></div>
+        </div>
+        <!-- Ledgers -->
+        <div v-else-if="tab==='ledgers'" key="ledgers">
+          <div class="filter-bar">
+            <el-input v-model="filter.customer_name" placeholder="搜索客户名称..." style="width:220px" clearable @clear="loadLedgers" @keyup.enter="loadLedgers"><template #prefix><i class="fas fa-search" style="color:#c0c4cc;"></i></template></el-input>
+            <el-select v-model="filter.ar_status" placeholder="AR状态" clearable style="width:140px" @change="loadLedgers"><el-option label="待核销" value="pending"></el-option><el-option label="部分收款" value="partial"></el-option><el-option label="已清算" value="settled"></el-option></el-select>
+            <el-select v-model="filter.ap_status" placeholder="AP状态" clearable style="width:140px" @change="loadLedgers"><el-option label="待付款" value="pending"></el-option><el-option label="部分付款" value="partial"></el-option><el-option label="已结清" value="settled"></el-option></el-select>
+            <el-button type="primary" @click="loadLedgers"><i class="fas fa-filter" style="margin-right:4px;"></i>筛选</el-button>
+            <el-button @click="resetFilter">重置</el-button>
+            <div style="flex:1"></div>
+            <el-popover v-model:visible="columnSettingsVisible" placement="bottom-end" width="280" trigger="click" popper-class="column-popover">
+              <template #reference><el-button><i class="fas fa-columns" style="margin-right:4px;"></i>列设置</el-button></template>
+              <div style="max-height:400px;overflow-y:auto;padding:4px;">
+                <div style="font-weight:600;margin-bottom:10px;font-size:14px;display:flex;justify-content:space-between;"><span>自定义显示列</span><el-button size="small" text type="primary" @click="resetColumnSettings">恢复默认</el-button></div>
+                <div v-for="(cols, group) in columnGroups" :key="group" style="margin-bottom:14px;">
+                  <div style="font-size:12px;color:#909399;margin-bottom:6px;font-weight:600;">{{ group }}</div>
+                  <el-checkbox-group v-model="visibleColumnKeys" size="small" style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <el-checkbox v-for="col in cols" :key="col.key" :label="col.key" :disabled="col.key==='actions'" style="margin:0;">{{ col.label }}</el-checkbox>
+                  </el-checkbox-group>
+                </div>
+              </div>
+            </el-popover>
+            <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>新增流水</el-button>
+          </div>
+          <div class="table-wrap">
+            <el-table :data="ledgers" stripe style="width:100%" v-loading="loading" max-height="620" :key="'ledger-table-' + columnConfigVersion" empty-text="暂无流水数据，点击右上角「新增流水」开始录入">
+              <el-table-column v-if="isColVisible('index')" key="index" type="index" width="50" label="#" fixed="left"></el-table-column>
+              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" label="客户名称" width="170" fixed="left" show-overflow-tooltip><template #default="{row}"><span style="font-weight:600;">{{ row.customer_name }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('payment_item')" key="payment_item" prop="payment_item" label="付款项目" width="100"><template #default="{row}"><el-tag size="small" effect="plain">{{ row.payment_item }}</el-tag></template></el-table-column>
+              <el-table-column v-if="isColVisible('order_fee')" key="order_fee" label="订单费(货值)" width="120" align="right"><template #default="{row}"><span class="amount">{{ fmt(row.order_fee) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('commission')" key="commission" label="佣金" width="90" align="right"><template #default="{row}"><span class="amount purple">{{ fmt(row.commission) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('total_cost')" key="total_cost" label="总费用" width="120" align="right"><template #default="{row}"><span class="amount total">{{ fmt(row.total_cost) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('customer_paid')" key="customer_paid" label="客户已付" width="110" align="right"><template #default="{row}"><span class="amount pos">{{ fmt(row.customer_paid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('customer_unpaid')" key="customer_unpaid" label="客户未付" width="110" align="right"><template #default="{row}"><span class="amount" :class="{neg: row.customer_unpaid>0}">{{ fmt(row.customer_unpaid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('ar_status')" key="ar_status" label="AR状态" width="95" align="center"><template #default="{row}"><el-tag :type="statusType(row.ar_status)" size="small" effect="light">{{ statusLabel(row.ar_status,'ar') }}</el-tag></template></el-table-column>
+              <el-table-column v-if="isColVisible('customer_proof')" key="customer_proof" label="客户付款截图" width="90" align="center"><template #default="{row}"><img v-if="row.customer_proof_url" :src="row.customer_proof_url" class="proof-thumb" @click="previewImage(row.customer_proof_url)"><div v-else class="proof-empty"><i class="fas fa-image"></i></div></template></el-table-column>
+              <el-table-column v-if="isColVisible('collection_date')" key="collection_date" prop="collection_date" label="收款日期" width="105"></el-table-column>
+              <el-table-column v-if="isColVisible('product_paid')" key="product_paid" label="货值已付" width="110" align="right"><template #default="{row}"><span class="amount pos">{{ fmt(row.product_paid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('product_unpaid')" key="product_unpaid" label="货值未付" width="110" align="right"><template #default="{row}"><span class="amount" :class="{neg: row.product_unpaid>0}">{{ fmt(row.product_unpaid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('product_ap_status')" key="product_ap_status" label="货值AP" width="90" align="center"><template #default="{row}"><el-tag :type="statusType(row.product_ap_status)" size="small" effect="light">{{ statusLabel(row.product_ap_status,'ap') }}</el-tag></template></el-table-column>
+              <el-table-column v-if="isColVisible('product_proof')" key="product_proof" label="货值付款截图" width="90" align="center"><template #default="{row}"><img v-if="row.product_proof_url" :src="row.product_proof_url" class="proof-thumb" @click="previewImage(row.product_proof_url)"><div v-else class="proof-empty"><i class="fas fa-image"></i></div></template></el-table-column>
+              <el-table-column v-if="isColVisible('product_payment_time')" key="product_payment_time" prop="product_payment_time" label="货值付款时间" width="145"></el-table-column>
+              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" label="佣金已付" width="110" align="right"><template #default="{row}"><span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('commission_unpaid')" key="commission_unpaid" label="佣金未付" width="110" align="right"><template #default="{row}"><span class="amount" :class="{neg: row.commission_unpaid>0}">{{ fmt(row.commission_unpaid) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('commission_ap_status')" key="commission_ap_status" label="佣金AP" width="90" align="center"><template #default="{row}"><el-tag :type="statusType(row.commission_ap_status)" size="small" effect="light">{{ statusLabel(row.commission_ap_status,'ap') }}</el-tag></template></el-table-column>
+              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" label="佣金付款截图" width="90" align="center"><template #default="{row}"><img v-if="row.commission_proof_url" :src="row.commission_proof_url" class="proof-thumb" @click="previewImage(row.commission_proof_url)"><div v-else class="proof-empty"><i class="fas fa-image"></i></div></template></el-table-column>
+              <el-table-column v-if="isColVisible('commission_payment_time')" key="commission_payment_time" prop="commission_payment_time" label="佣金付款时间" width="145"></el-table-column>
+              <el-table-column v-if="isColVisible('total_cost_cny')" key="total_cost_cny" label="总费用(CNY)" width="100" align="right"><template #default="{row}"><span style="color:var(--text-light);">&yen;{{ fmt(row.total_cost_cny, 2) }}</span></template></el-table-column>
+              <el-table-column v-if="isColVisible('remark')" key="remark" prop="remark" label="备注" width="120" show-overflow-tooltip></el-table-column>
+              <el-table-column v-if="isColVisible('actions')" key="actions" label="操作" width="320" fixed="right"><template #default="{row}">
+                <el-button size="small" text @click="openEdit(row)"><i class="fas fa-pen"></i></el-button>
+                <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> 收款</el-button>
+                <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> 货值付款</el-button>
+                <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> 佣金付款</el-button>
+                <el-button size="small" type="danger" text @click="deleteLedger(row)"><i class="fas fa-trash"></i></el-button>
+              </template></el-table-column>
+            </el-table>
+          </div>
+        </div>
+        <!-- Rates -->
+        <div v-else-if="tab==='rates'" key="rates">
+          <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
+            <div class="card"><div class="card-header"><h3><i class="fas fa-list" style="color:var(--color-primary);margin-right:8px;"></i>汇率列表</h3></div>
+              <el-table :data="rates" stripe style="width:100%" v-loading="loading" empty-text="暂无汇率数据">
+                <el-table-column type="index" width="50" label="#"></el-table-column>
+                <el-table-column prop="from_currency" label="源币种" width="100"><template #default="{row}"><el-tag size="small">{{ row.from_currency }}</el-tag></template></el-table-column>
+                <el-table-column label="" width="30"><template #default><i class="fas fa-arrow-right" style="color:#c0c4cc;"></i></template></el-table-column>
+                <el-table-column prop="to_currency" label="目标币种" width="100"><template #default="{row}"><el-tag size="small" type="success">{{ row.to_currency }}</el-tag></template></el-table-column>
+                <el-table-column label="汇率" width="150"><template #default="{row}"><span style="font-family:monospace;font-weight:700;font-size:14px;">{{ row.rate }}</span></template></el-table-column>
+                <el-table-column prop="rate_date" label="日期" width="120"></el-table-column>
+                <el-table-column prop="source" label="来源" width="80"><template #default="{row}"><el-tag size="small" type="info" effect="plain">{{ row.source }}</el-tag></template></el-table-column>
+                <el-table-column prop="created_at" label="创建时间"></el-table-column>
+              </el-table>
+            </div>
+            <div class="card"><div class="card-header"><h3><i class="fas fa-plus" style="color:var(--color-primary);margin-right:8px;"></i>新增汇率</h3></div><div class="card-body">
+              <el-form :model="newRate" label-width="80px">
+                <el-form-item label="源币种"><el-select v-model="newRate.from_currency" style="width:100%"><el-option label="IDR 印尼盾" value="IDR"></el-option><el-option label="CNY 人民币" value="CNY"></el-option><el-option label="USD 美元" value="USD"></el-option></el-select></el-form-item>
+                <el-form-item label="目标币种"><el-select v-model="newRate.to_currency" style="width:100%"><el-option label="IDR 印尼盾" value="IDR"></el-option><el-option label="CNY 人民币" value="CNY"></el-option><el-option label="USD 美元" value="USD"></el-option></el-select></el-form-item>
+                <el-form-item label="汇率"><el-input-number v-model="newRate.rate" :precision="6" :step="0.0001" :controls="false" style="width:100%"></el-input-number></el-form-item>
+                <el-form-item label="日期"><el-date-picker v-model="newRate.rate_date" type="date" value-format="YYYY-MM-DD" style="width:100%"></el-date-picker></el-form-item>
+                <el-form-item><el-button type="primary" @click="addRate" style="width:100%"><i class="fas fa-check" style="margin-right:6px;"></i>添加汇率</el-button></el-form-item>
+              </el-form>
+            </div></div>
+          </div>
+        </div>
+        <!-- Audit -->
+        <div v-else-if="tab==='audit'" key="audit">
+          <div class="card"><div class="card-header"><h3><i class="fas fa-shield-halved" style="color:var(--color-primary);margin-right:8px;"></i>操作审计日志</h3><el-button size="small" @click="loadAuditLogs"><i class="fas fa-rotate" style="margin-right:4px;"></i>刷新</el-button></div>
+            <el-table :data="auditLogs" stripe style="width:100%" v-loading="loading" max-height="620" empty-text="暂无审计日志">
+              <el-table-column type="index" width="50" label="#"></el-table-column>
+              <el-table-column prop="operated_at" label="操作时间" width="170"></el-table-column>
+              <el-table-column prop="table_name" label="表名" width="200" show-overflow-tooltip><template #default="{row}"><el-tag size="small" type="info" effect="plain">{{ row.table_name }}</el-tag></template></el-table-column>
+              <el-table-column prop="record_id" label="记录ID" width="80" align="center"><template #default="{row}"><span style="font-family:monospace;font-weight:600;">#{{ row.record_id }}</span></template></el-table-column>
+              <el-table-column prop="field_name" label="字段" width="160"><template #default="{row}"><span style="font-family:monospace;color:var(--color-primary);">{{ row.field_name }}</span></template></el-table-column>
+              <el-table-column label="旧值" width="160" show-overflow-tooltip><template #default="{row}"><span style="color:var(--text-light);">{{ row.old_value || 'null' }}</span></template></el-table-column>
+              <el-table-column label="" width="30"><template #default><i class="fas fa-arrow-right" style="color:#c0c4cc;font-size:11px;"></i></template></el-table-column>
+              <el-table-column label="新值" width="160" show-overflow-tooltip><template #default="{row}"><span style="color:var(--color-success);font-weight:600;">{{ row.new_value || 'null' }}</span></template></el-table-column>
+              <el-table-column prop="operator_name" label="操作人" width="100"><template #default="{row}"><div style="display:flex;align-items:center;gap:6px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;">{{ (row.operator_name||'A')[0].toUpperCase() }}</div>{{ row.operator_name }}</div></template></el-table-column>
+            </el-table>
+          </div>
+        </div>
+        </transition>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit Dialog -->
+  <el-dialog :title="editing ? '编辑流水' : '新增流水'" v-model="dialogVisible" width="620px" :close-on-click-modal="false">
+    <el-form :model="form" label-width="110px">
+      <el-form-item label="客户名称" required><el-input v-model="form.customer_name" placeholder="如 Redragon Store Jatim"><template #prefix><i class="fas fa-user" style="color:#c0c4cc;"></i></template></el-input></el-form-item>
+      <el-form-item label="付款项目"><el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option><el-option label="FO-PLAN" value="FO-PLAN"></el-option><el-option label="FO-PRO" value="FO-PRO"></el-option><el-option label="FO-BASIC" value="FO-BASIC"></el-option><el-option label="CUSTOM" value="CUSTOM"></el-option></el-select></el-form-item>
+      <div style="display:flex;gap:12px;">
+        <el-form-item label="订单费/货值" style="flex:1;"><el-input-number v-model="form.order_fee" :precision="2" :step="100000" :min="0" style="width:100%"></el-input-number></el-form-item>
+        <el-form-item label="佣金" style="flex:1;"><el-input-number v-model="form.commission" :precision="2" :step="10000" :min="0" style="width:100%"></el-input-number></el-form-item>
+      </div>
+      <el-form-item label="汇率 (IDR&rarr;CNY)"><el-input-number v-model="form.exchange_rate" :precision="6" :step="0.0001" :min="0" style="width:100%" :controls="false"></el-input-number></el-form-item>
+      <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" placeholder="可选备注信息"></el-input></el-form-item>
+      <el-form-item label="总费用预览"><div style="background:#f0f5ff;border:1px solid #adc6ff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;"><div><span style="font-size:22px;font-weight:700;color:var(--color-primary);">{{ fmt((form.order_fee||0) + (form.commission||0)) }}</span><span style="font-size:12px;color:var(--text-secondary);margin-left:8px;">IDR</span></div><div style="font-size:14px;color:var(--text-secondary);">&asymp; &yen; {{ fmt(((form.order_fee||0)+(form.commission||0))*(form.exchange_rate||0.000460), 2) }} CNY</div></div></el-form-item>
+      <div style="display:flex;gap:12px;">
+        <el-form-item label="客户付款截图" style="flex:1;"><div v-if="editProofs.customer_proof_url" class="upload-preview-wrap"><img :src="editProofs.customer_proof_url"><div class="remove-btn" @click="editProofs.customer_proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.editCustomerProof.click()" @paste="handlePaste($event, editProofs, 'customer_proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传客户付款截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="editCustomerProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'customer_proof_url')"></div></el-form-item>
+        <el-form-item label="货值付款截图" style="flex:1;"><div v-if="editProofs.product_proof_url" class="upload-preview-wrap"><img :src="editProofs.product_proof_url"><div class="remove-btn" @click="editProofs.product_proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.editProductProof.click()" @paste="handlePaste($event, editProofs, 'product_proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传货值付款截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="editProductProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'product_proof_url')"></div></el-form-item>
+        <el-form-item label="佣金付款截图" style="flex:1;"><div v-if="editProofs.commission_proof_url" class="upload-preview-wrap"><img :src="editProofs.commission_proof_url"><div class="remove-btn" @click="editProofs.commission_proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.editCommissionProof.click()" @paste="handlePaste($event, editProofs, 'commission_proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传佣金付款截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="editCommissionProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'commission_proof_url')"></div></el-form-item>
+      </div>
+    </el-form>
+    <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" @click="saveLedger" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ editing ? '保存修改' : '创建流水' }}</el-button></template>
+  </el-dialog>
+
+  <!-- Customer Payment Dialog -->
+  <el-dialog title="客户收款" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
+    <div v-if="currentLedger" class="dialog-info-box"><div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div><div class="row"><span>总费用：</span><b>{{ fmt(currentLedger.total_cost) }} IDR</b></div><div class="row"><span>已付：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.customer_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.customer_unpaid) }}</b></div></div>
+    <el-form :model="payment" label-width="100px">
+      <el-form-item label="收款金额" required><el-input-number v-model="payment.amount" :precision="2" :step="100000" :min="0.01" style="width:100%"></el-input-number></el-form-item>
+      <el-form-item label="收款日期"><el-date-picker v-model="payment.collection_date" type="date" value-format="YYYY-MM-DD" style="width:100%"></el-date-picker></el-form-item>
+      <el-form-item label="支付截图"><div v-if="payment.proof_url" class="upload-preview-wrap"><img :src="payment.proof_url"><div class="remove-btn" @click="payment.proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.customerFile.click()" @paste="handlePaste($event, payment, 'proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传支付截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="customerFile" accept="image/*" style="display:none" @change="uploadFile($event, payment, 'proof_url')"></div></el-form-item>
+    </el-form>
+    <template #footer><el-button @click="paymentDialogVisible=false">取消</el-button><el-button type="primary" @click="saveCustomerPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>确认收款</el-button></template>
+  </el-dialog>
+
+  <!-- Product Payment Dialog -->
+  <el-dialog title="货值付款" v-model="productPaymentDialogVisible" width="500px" :close-on-click-modal="false">
+    <div v-if="currentLedger" class="dialog-info-box"><div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div><div class="row"><span>货值/订单费：</span><b>{{ fmt(currentLedger.order_fee) }} IDR</b></div><div class="row"><span>已付货值：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.product_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.product_unpaid) }}</b></div></div>
+    <div v-if="currentLedger && currentLedger.ar_status==='pending'" class="dialog-warn-box"><i class="fas fa-triangle-exclamation"></i>客户尚未付款，建议先收款再付款给FO机构</div>
+    <el-form :model="productPayment" label-width="100px">
+      <el-form-item label="付款金额" required><el-input-number v-model="productPayment.amount" :precision="2" :step="100000" :min="0.01" style="width:100%"></el-input-number></el-form-item>
+      <el-form-item label="付款时间"><el-date-picker v-model="productPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%"></el-date-picker></el-form-item>
+      <el-form-item label="支付截图"><div v-if="productPayment.proof_url" class="upload-preview-wrap"><img :src="productPayment.proof_url"><div class="remove-btn" @click="productPayment.proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.productFile.click()" @paste="handlePaste($event, productPayment, 'proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传支付截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="productFile" accept="image/*" style="display:none" @change="uploadFile($event, productPayment, 'proof_url')"></div></el-form-item>
+    </el-form>
+    <template #footer><el-button @click="productPaymentDialogVisible=false">取消</el-button><el-button type="warning" @click="saveProductPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>确认货值付款</el-button></template>
+  </el-dialog>
+
+  <!-- Commission Payment Dialog -->
+  <el-dialog title="佣金付款" v-model="commissionPaymentDialogVisible" width="500px" :close-on-click-modal="false">
+    <div v-if="currentLedger" class="dialog-info-box" style="background:#f9f0ff;border-color:#d3adf7;"><div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div><div class="row"><span>佣金：</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} IDR</b></div><div class="row"><span>已付佣金：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div></div>
+    <div v-if="currentLedger && currentLedger.ar_status==='pending'" class="dialog-warn-box"><i class="fas fa-triangle-exclamation"></i>客户尚未付款，建议先收款再付款给FO机构</div>
+    <el-form :model="commissionPayment" label-width="100px">
+      <el-form-item label="付款金额" required><el-input-number v-model="commissionPayment.amount" :precision="2" :step="10000" :min="0.01" style="width:100%"></el-input-number></el-form-item>
+      <el-form-item label="付款时间"><el-date-picker v-model="commissionPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%"></el-date-picker></el-form-item>
+      <el-form-item label="支付截图"><div v-if="commissionPayment.proof_url" class="upload-preview-wrap"><img :src="commissionPayment.proof_url"><div class="remove-btn" @click="commissionPayment.proof_url=''"><i class="fas fa-times"></i></div></div><div v-else class="upload-zone" tabindex="0" @click="$refs.commissionFile.click()" @paste="handlePaste($event, commissionPayment, 'proof_url')"><i class="fas fa-cloud-arrow-up"></i><p>点击上传支付截图</p><p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p><input type="file" ref="commissionFile" accept="image/*" style="display:none" @change="uploadFile($event, commissionPayment, 'proof_url')"></div></el-form-item>
+    </el-form>
+    <template #footer><el-button @click="commissionPaymentDialogVisible=false">取消</el-button><el-button type="primary" @click="saveCommissionPayment" :loading="saving" style="background:var(--color-purple);border-color:var(--color-purple);"><i class="fas fa-check" style="margin-right:4px;"></i>确认佣金付款</el-button></template>
+  </el-dialog>
+
+  <el-dialog v-model="imagePreviewVisible" width="auto" style="max-width:90vw;"><img :src="imagePreviewUrl" style="width:100%;max-width:600px;border-radius:8px;"></el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.7.6/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2/dist/index.iife.min.js"></script>
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+// ===== Cloud Database (jsonblob.com shared storage) =====
+const BLOB_ID = '019f3b82-61e9-76ab-b449-65abcc95eec6';
+const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
+
+const app = createApp({
+  data() {
+    return {
+      tab: 'dashboard', sidebarOpen: false, loading: false, saving: false,
+      ledgers: [], rates: [], auditLogs: [], summary: {},
+      filter: { customer_name: '', ar_status: '', ap_status: '' },
+      syncStatus: '', syncStatusText: '',
+      // Cloud data cache
+      cloudData: null,
+      dialogVisible: false, editing: false,
+      form: { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, exchange_rate: 0.000460, remark: '' },
+      editProofs: { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' },
+      paymentDialogVisible: false, currentLedger: null,
+      payment: { amount: 0, collection_date: '', proof_url: '' },
+      productPaymentDialogVisible: false, productPayment: { amount: 0, payment_time: '', proof_url: '' },
+      commissionPaymentDialogVisible: false, commissionPayment: { amount: 0, payment_time: '', proof_url: '' },
+      imagePreviewVisible: false, imagePreviewUrl: '',
+      newRate: { from_currency: 'IDR', to_currency: 'CNY', rate: 0.000460, rate_date: new Date().toISOString().slice(0,10) },
+      columnSettingsVisible: false, columnConfigVersion: 0,
+      availableColumns: [
+        { key: 'index', label: '#', visible: true, group: '基础' },
+        { key: 'customer_name', label: '客户名称', visible: true, group: '基础' },
+        { key: 'payment_item', label: '付款项目', visible: true, group: '基础' },
+        { key: 'order_fee', label: '订单费(货值)', visible: true, group: '费用' },
+        { key: 'commission', label: '佣金', visible: true, group: '费用' },
+        { key: 'total_cost', label: '总费用', visible: true, group: '费用' },
+        { key: 'total_cost_cny', label: '总费用(CNY)', visible: false, group: '费用' },
+        { key: 'customer_paid', label: '客户已付', visible: true, group: '客户收款' },
+        { key: 'customer_unpaid', label: '客户未付', visible: true, group: '客户收款' },
+        { key: 'ar_status', label: 'AR状态', visible: true, group: '客户收款' },
+        { key: 'customer_proof', label: '客户付款截图', visible: true, group: '客户收款' },
+        { key: 'collection_date', label: '收款日期', visible: true, group: '客户收款' },
+        { key: 'product_paid', label: '货值已付', visible: true, group: '货值付款' },
+        { key: 'product_unpaid', label: '货值未付', visible: true, group: '货值付款' },
+        { key: 'product_ap_status', label: '货值AP', visible: true, group: '货值付款' },
+        { key: 'product_proof', label: '货值付款截图', visible: true, group: '货值付款' },
+        { key: 'product_payment_time', label: '货值付款时间', visible: false, group: '货值付款' },
+        { key: 'commission_paid', label: '佣金已付', visible: true, group: '佣金付款' },
+        { key: 'commission_unpaid', label: '佣金未付', visible: true, group: '佣金付款' },
+        { key: 'commission_ap_status', label: '佣金AP', visible: true, group: '佣金付款' },
+        { key: 'commission_proof', label: '佣金付款截图', visible: true, group: '佣金付款' },
+        { key: 'commission_payment_time', label: '佣金付款时间', visible: false, group: '佣金付款' },
+        { key: 'remark', label: '备注', visible: true, group: '基础' },
+        { key: 'actions', label: '操作', visible: true, group: '基础' },
+      ],
+    };
+  },
+  computed: {
+    pageTitle() { return { dashboard: '财务看板', ledgers: '对账流水', rates: '汇率管理', audit: '审计日志' }[this.tab] || ''; },
+    columnGroups() { const g = {}; this.availableColumns.forEach(c => { if (!g[c.group]) g[c.group] = []; g[c.group].push(c); }); return g; },
+    visibleColumnKeys: {
+      get() { return this.availableColumns.filter(c => c.visible).map(c => c.key); },
+      set(keys) { this.availableColumns.forEach(c => { c.visible = keys.includes(c.key); }); this.columnConfigVersion++; this.saveColumnSettings(); }
+    }
+  },
+  methods: {
+    // ===== Cloud DB operations =====
+    async cloudFetch() {
+      this.syncStatus = 'syncing'; this.syncStatusText = '同步中...';
+      try {
+        const res = await fetch(BLOB_URL, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error('Fetch failed');
+        this.cloudData = await res.json();
+        if (!this.cloudData.ledgers) this.cloudData.ledgers = [];
+        if (!this.cloudData.rates) this.cloudData.rates = [];
+        if (!this.cloudData.auditLogs) this.cloudData.auditLogs = [];
+        if (!this.cloudData.nextLedgerId) this.cloudData.nextLedgerId = 1;
+        if (!this.cloudData.nextRateId) this.cloudData.nextRateId = 1;
+        if (!this.cloudData.nextAuditId) this.cloudData.nextAuditId = 1;
+        this.syncStatus = 'synced'; this.syncStatusText = '已同步';
+      } catch(e) {
+        this.syncStatus = 'error'; this.syncStatusText = '同步失败';
+        console.error('Cloud fetch error:', e);
+      }
+    },
+    async cloudSave() {
+      this.syncStatus = 'syncing'; this.syncStatusText = '保存中...';
+      try {
+        const res = await fetch(BLOB_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(this.cloudData)
+        });
+        if (!res.ok) throw new Error('Save failed');
+        this.syncStatus = 'synced'; this.syncStatusText = '已同步';
+        return true;
+      } catch(e) {
+        this.syncStatus = 'error'; this.syncStatusText = '保存失败';
+        ElementPlus.ElMessage.error('数据保存失败，请重试');
+        return false;
+      }
+    },
+    logAudit(tableName, recordId, fieldName, oldVal, newVal, operator = 'admin') {
+      if (String(oldVal) === String(newVal)) return;
+      this.cloudData.auditLogs.unshift({
+        id: this.cloudData.nextAuditId++,
+        table_name: tableName, record_id: recordId, field_name: fieldName,
+        old_value: String(oldVal), new_value: String(newVal),
+        operator_name: operator, operated_at: new Date().toISOString().slice(0,19).replace('T',' ')
+      });
+      if (this.cloudData.auditLogs.length > 500) this.cloudData.auditLogs = this.cloudData.auditLogs.slice(0, 500);
+    },
+    recalcStatus(ledger) {
+      const total = (ledger.order_fee || 0) + (ledger.commission || 0);
+      if (ledger.customer_paid <= 0) ledger.ar_status = 'pending';
+      else if (ledger.customer_paid < total) ledger.ar_status = 'partial';
+      else ledger.ar_status = 'settled';
+      if (ledger.product_paid <= 0) ledger.product_ap_status = 'pending';
+      else if (ledger.product_paid < ledger.order_fee) ledger.product_ap_status = 'partial';
+      else ledger.product_ap_status = 'settled';
+      if (ledger.commission_paid <= 0) ledger.commission_ap_status = 'pending';
+      else if (ledger.commission_paid < ledger.commission) ledger.commission_ap_status = 'partial';
+      else ledger.commission_ap_status = 'settled';
+      if (ledger.product_ap_status === 'settled' && ledger.commission_ap_status === 'settled') ledger.ap_status = 'settled';
+      else if (ledger.product_ap_status === 'pending' && ledger.commission_ap_status === 'pending') ledger.ap_status = 'pending';
+      else ledger.ap_status = 'partial';
+      if (ledger.ar_status === 'settled' && ledger.ap_status === 'settled') ledger.reconciliation_status = 'completed';
+      else if (ledger.ar_status !== 'pending' || ledger.ap_status !== 'pending') ledger.reconciliation_status = 'in_progress';
+      else ledger.reconciliation_status = 'open';
+    },
+    enrichLedger(l) {
+      l.total_cost = (l.order_fee || 0) + (l.commission || 0);
+      l.customer_unpaid = Math.round((l.total_cost - (l.customer_paid || 0)) * 100) / 100;
+      l.product_unpaid = Math.round(((l.order_fee || 0) - (l.product_paid || 0)) * 100) / 100;
+      l.commission_unpaid = Math.round(((l.commission || 0) - (l.commission_paid || 0)) * 100) / 100;
+      l.fo_paid_total = Math.round(((l.product_paid || 0) + (l.commission_paid || 0)) * 100) / 100;
+      l.fo_unpaid_total = Math.round((l.product_unpaid + l.commission_unpaid) * 100) / 100;
+      l.total_cost_cny = Math.round(l.total_cost * (l.exchange_rate || 0.000460) * 100) / 100;
+      return l;
+    },
+    // ===== UI helpers =====
+    fmt(val, decimals) {
+      if (decimals === undefined) decimals = 0;
+      if (val === null || val === undefined || val === '') return '0';
+      const n = Number(val); if (isNaN(n)) return '0';
+      if (decimals === 0) return Math.round(n).toLocaleString('en-US');
+      return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    },
+    statusType(s) { return { pending: 'info', partial: 'warning', settled: 'success' }[s] || 'info'; },
+    statusLabel(s, type) { const ar = { pending: '待核销', partial: '部分收款', settled: '已清算' }; const ap = { pending: '待付款', partial: '部分付款', settled: '已结清' }; return type === 'ap' ? (ap[s] || s) : (ar[s] || s); },
+    switchTab(t) { this.tab = t; this.sidebarOpen = false; if (t === 'dashboard') this.loadSummary(); if (t === 'ledgers') this.loadLedgers(); if (t === 'rates') this.loadRates(); if (t === 'audit') this.loadAuditLogs(); },
+    refreshData() { this.cloudFetch().then(() => this.switchTab(this.tab)); },
+    // ===== Data loading =====
+    async loadLedgers() {
+      this.loading = true;
+      await this.cloudFetch();
+      let rows = this.cloudData.ledgers.filter(l => !l.is_deleted);
+      if (this.filter.customer_name) rows = rows.filter(l => l.customer_name.includes(this.filter.customer_name));
+      if (this.filter.ar_status) rows = rows.filter(l => l.ar_status === this.filter.ar_status);
+      if (this.filter.ap_status) rows = rows.filter(l => l.ap_status === this.filter.ap_status);
+      this.ledgers = rows.map(l => this.enrichLedger({...l})).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+      this.loading = false;
+    },
+    resetFilter() { this.filter = { customer_name: '', ar_status: '', ap_status: '' }; this.loadLedgers(); },
+    async loadSummary() {
+      await this.cloudFetch();
+      const rows = this.cloudData.ledgers.filter(l => !l.is_deleted).map(l => this.enrichLedger({...l}));
+      const total_receivable = rows.reduce((s, r) => s + (r.customer_unpaid || 0), 0);
+      const total_payable = rows.reduce((s, r) => s + (r.product_unpaid || 0) + (r.commission_unpaid || 0), 0);
+      const total_receivable_cny = rows.reduce((s, r) => s + (r.customer_unpaid || 0) * (r.exchange_rate || 0.000460), 0);
+      const total_payable_cny = rows.reduce((s, r) => s + ((r.product_unpaid || 0) + (r.commission_unpaid || 0)) * (r.exchange_rate || 0.000460), 0);
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue_ar = rows.filter(r => r.collection_date && r.collection_date < today && r.ar_status !== 'settled').reduce((s, r) => s + (r.customer_unpaid || 0), 0);
+      const count = (st, field) => rows.filter(r => r[field] === st).length;
+      this.summary = {
+        total_receivable: Math.round(total_receivable * 100) / 100,
+        total_payable: Math.round(total_payable * 100) / 100,
+        total_receivable_cny: Math.round(total_receivable_cny * 100) / 100,
+        total_payable_cny: Math.round(total_payable_cny * 100) / 100,
+        overdue_ar: Math.round(overdue_ar * 100) / 100,
+        ar_status_counts: { pending: count('pending','ar_status'), partial: count('partial','ar_status'), settled: count('settled','ar_status') },
+        ap_status_counts: { pending: count('pending','ap_status'), partial: count('partial','ap_status'), settled: count('settled','ap_status') },
+        product_ap_counts: { pending: count('pending','product_ap_status'), partial: count('partial','product_ap_status'), settled: count('settled','product_ap_status') },
+        commission_ap_counts: { pending: count('pending','commission_ap_status'), partial: count('partial','commission_ap_status'), settled: count('settled','commission_ap_status') },
+        total_records: rows.length,
+      };
+    },
+    async loadRates() { this.loading = true; await this.cloudFetch(); this.rates = [...this.cloudData.rates].sort((a,b) => (b.rate_date||'').localeCompare(a.rate_date||'')); this.loading = false; },
+    async loadAuditLogs() { this.loading = true; await this.cloudFetch(); this.auditLogs = [...this.cloudData.auditLogs].sort((a,b) => (b.operated_at||'').localeCompare(a.operated_at||'')).slice(0, 200); this.loading = false; },
+    // ===== Column settings =====
+    isColVisible(key) { const c = this.availableColumns.find(c => c.key === key); return c ? c.visible : true; },
+    saveColumnSettings() { localStorage.setItem('reconciliationLedgerColumns', JSON.stringify(this.availableColumns.map(c => ({ key: c.key, visible: c.visible })))); },
+    loadColumnSettings() { try { const s = localStorage.getItem('reconciliationLedgerColumns'); if (s) JSON.parse(s).forEach(o => { const c = this.availableColumns.find(c => c.key === o.key); if (c) c.visible = o.visible; }); } catch(e) {} },
+    resetColumnSettings() { this.availableColumns.forEach(c => c.visible = true); this.columnConfigVersion++; this.saveColumnSettings(); ElementPlus.ElMessage.success('已恢复默认列设置'); },
+    // ===== CRUD =====
+    openCreate() { this.editing = false; this.form = { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, exchange_rate: 0.000460, remark: '' }; this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' }; this.dialogVisible = true; },
+    openEdit(row) { this.editing = true; this.form = JSON.parse(JSON.stringify(row)); this.editProofs = { customer_proof_url: row.customer_proof_url || '', product_proof_url: row.product_proof_url || '', commission_proof_url: row.commission_proof_url || '' }; this.dialogVisible = true; },
+    async saveLedger() {
+      if (!this.form.customer_name?.trim()) { ElementPlus.ElMessage.warning('请填写客户名称'); return; }
+      this.saving = true;
+      const now = new Date().toISOString().slice(0,19).replace('T',' ');
+      const data = {
+        customer_name: this.form.customer_name.trim(), payment_item: this.form.payment_item || 'FO-PLAN',
+        order_fee: this.form.order_fee || 0, commission: this.form.commission || 0,
+        exchange_rate: this.form.exchange_rate || 0.000460, remark: this.form.remark || '',
+        customer_proof_url: this.editProofs.customer_proof_url || '',
+        product_proof_url: this.editProofs.product_proof_url || '',
+        commission_proof_url: this.editProofs.commission_proof_url || '',
+      };
+      if (this.editing) {
+        const idx = this.cloudData.ledgers.findIndex(l => l.id === this.form.id);
+        if (idx >= 0) {
+          const old = this.cloudData.ledgers[idx];
+          ['customer_name','payment_item','order_fee','commission','exchange_rate','remark','customer_proof_url','product_proof_url','commission_proof_url'].forEach(f => {
+            this.logAudit('evaluation_expense_ledger', old.id, f, old[f], data[f]);
+          });
+          Object.assign(this.cloudData.ledgers[idx], data, { updated_at: now });
+          this.recalcStatus(this.cloudData.ledgers[idx]);
+          ElementPlus.ElMessage.success('修改成功');
+        }
+      } else {
+        const ledger = { id: this.cloudData.nextLedgerId++, ...data, customer_paid: 0, collection_date: null,
+          product_paid: 0, product_payment_time: null, commission_paid: 0, commission_payment_time: null,
+          fo_paid: 0, fo_payment_time: null, fo_proof_url: null, currency: 'IDR', is_deleted: 0,
+          ar_status: 'pending', ap_status: 'pending', product_ap_status: 'pending', commission_ap_status: 'pending',
+          reconciliation_status: 'open', created_by: 'admin', created_at: now, updated_at: now };
+        this.recalcStatus(ledger);
+        this.cloudData.ledgers.push(ledger);
+        ElementPlus.ElMessage.success('创建成功');
+      }
+      await this.cloudSave();
+      this.dialogVisible = false;
+      this.loadLedgers(); this.loadSummary();
+      this.saving = false;
+    },
+    // ===== Payments =====
+    openCustomerPayment(row) { this.currentLedger = JSON.parse(JSON.stringify(row)); this.payment = { amount: row.customer_unpaid, collection_date: new Date().toISOString().slice(0,10), proof_url: row.customer_proof_url || '' }; this.paymentDialogVisible = true; },
+    async saveCustomerPayment() {
+      if (!this.payment.amount || this.payment.amount <= 0) { ElementPlus.ElMessage.warning('请输入收款金额'); return; }
+      this.saving = true; await this.cloudFetch();
+      const ledger = this.cloudData.ledgers.find(l => l.id === this.currentLedger.id);
+      if (!ledger) { ElementPlus.ElMessage.error('记录不存在'); this.saving = false; return; }
+      const newPaid = (ledger.customer_paid || 0) + this.payment.amount;
+      const total = (ledger.order_fee || 0) + (ledger.commission || 0);
+      if (newPaid > total) { ElementPlus.ElMessage.error('收款超过总费用'); this.saving = false; return; }
+      this.logAudit('evaluation_expense_ledger', ledger.id, 'customer_paid', ledger.customer_paid, newPaid);
+      ledger.customer_paid = newPaid; ledger.collection_date = this.payment.collection_date; ledger.customer_proof_url = this.payment.proof_url;
+      ledger.updated_at = new Date().toISOString().slice(0,19).replace('T',' ');
+      this.recalcStatus(ledger);
+      await this.cloudSave();
+      ElementPlus.ElMessage.success('收款记录成功'); this.paymentDialogVisible = false;
+      this.loadLedgers(); this.loadSummary(); this.saving = false;
+    },
+    openProductPayment(row) { this.currentLedger = JSON.parse(JSON.stringify(row)); this.productPayment = { amount: row.product_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.product_proof_url || '' }; this.productPaymentDialogVisible = true; },
+    async saveProductPayment() {
+      if (!this.productPayment.amount || this.productPayment.amount <= 0) { ElementPlus.ElMessage.warning('请输入付款金额'); return; }
+      this.saving = true; await this.cloudFetch();
+      const ledger = this.cloudData.ledgers.find(l => l.id === this.currentLedger.id);
+      if (!ledger) { ElementPlus.ElMessage.error('记录不存在'); this.saving = false; return; }
+      if (ledger.ar_status === 'pending') { ElementPlus.ElMessage.error('客户尚未付款，无法付款给FO机构'); this.saving = false; return; }
+      const newPaid = (ledger.product_paid || 0) + this.productPayment.amount;
+      if (newPaid > ledger.order_fee) { ElementPlus.ElMessage.error('货值付款超过订单费'); this.saving = false; return; }
+      this.logAudit('evaluation_expense_ledger', ledger.id, 'product_paid', ledger.product_paid, newPaid);
+      ledger.product_paid = newPaid; ledger.product_payment_time = this.productPayment.payment_time; ledger.product_proof_url = this.productPayment.proof_url;
+      ledger.updated_at = new Date().toISOString().slice(0,19).replace('T',' ');
+      this.recalcStatus(ledger);
+      await this.cloudSave();
+      ElementPlus.ElMessage.success('货值付款记录成功'); this.productPaymentDialogVisible = false;
+      this.loadLedgers(); this.loadSummary(); this.saving = false;
+    },
+    openCommissionPayment(row) { this.currentLedger = JSON.parse(JSON.stringify(row)); this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '' }; this.commissionPaymentDialogVisible = true; },
+    async saveCommissionPayment() {
+      if (!this.commissionPayment.amount || this.commissionPayment.amount <= 0) { ElementPlus.ElMessage.warning('请输入付款金额'); return; }
+      this.saving = true; await this.cloudFetch();
+      const ledger = this.cloudData.ledgers.find(l => l.id === this.currentLedger.id);
+      if (!ledger) { ElementPlus.ElMessage.error('记录不存在'); this.saving = false; return; }
+      if (ledger.ar_status === 'pending') { ElementPlus.ElMessage.error('客户尚未付款，无法付款给FO机构'); this.saving = false; return; }
+      const newPaid = (ledger.commission_paid || 0) + this.commissionPayment.amount;
+      if (newPaid > ledger.commission) { ElementPlus.ElMessage.error('佣金付款超过佣金金额'); this.saving = false; return; }
+      this.logAudit('evaluation_expense_ledger', ledger.id, 'commission_paid', ledger.commission_paid, newPaid);
+      ledger.commission_paid = newPaid; ledger.commission_payment_time = this.commissionPayment.payment_time; ledger.commission_proof_url = this.commissionPayment.proof_url;
+      ledger.updated_at = new Date().toISOString().slice(0,19).replace('T',' ');
+      this.recalcStatus(ledger);
+      await this.cloudSave();
+      ElementPlus.ElMessage.success('佣金付款记录成功'); this.commissionPaymentDialogVisible = false;
+      this.loadLedgers(); this.loadSummary(); this.saving = false;
+    },
+    async deleteLedger(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm('确认删除「' + row.customer_name + '」的流水记录？此操作为软删除。', '删除确认', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' });
+        await this.cloudFetch();
+        const ledger = this.cloudData.ledgers.find(l => l.id === row.id);
+        if (ledger) { ledger.is_deleted = 1; ledger.deleted_at = new Date().toISOString().slice(0,19).replace('T',' '); this.logAudit('evaluation_expense_ledger', ledger.id, 'is_deleted', 0, 1); }
+        await this.cloudSave();
+        ElementPlus.ElMessage.success('已删除'); this.loadLedgers(); this.loadSummary();
+      } catch(e) {}
+    },
+    async addRate() {
+      await this.cloudFetch();
+      const rate = { id: this.cloudData.nextRateId++, from_currency: this.newRate.from_currency, to_currency: this.newRate.to_currency, rate: this.newRate.rate, rate_date: this.newRate.rate_date, source: 'manual', created_at: new Date().toISOString().slice(0,19).replace('T',' ') };
+      this.cloudData.rates.push(rate);
+      await this.cloudSave();
+      ElementPlus.ElMessage.success('汇率添加成功');
+      this.newRate = { from_currency: 'IDR', to_currency: 'CNY', rate: 0.000460, rate_date: new Date().toISOString().slice(0,10) };
+      this.loadRates();
+    },
+    // ===== File upload (base64) =====
+    fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    },
+    async uploadFile(event, holder, field = 'proof_url') {
+      const file = event.target.files[0]; if (!file) return;
+      try { const url = await this.fileToBase64(file); holder[field] = url; ElementPlus.ElMessage.success('上传成功'); }
+      catch(e) { ElementPlus.ElMessage.error('上传失败'); }
+      event.target.value = '';
+    },
+    async handlePaste(event, holder, field = 'proof_url') {
+      const items = event.clipboardData && event.clipboardData.items; if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.startsWith('image/')) {
+          event.preventDefault();
+          const blob = items[i].getAsFile();
+          if (blob) { try { const url = await this.fileToBase64(blob); holder[field] = url; ElementPlus.ElMessage.success('粘贴上传成功'); } catch(e) { ElementPlus.ElMessage.error('粘贴上传失败'); } }
+          break;
+        }
+      }
+    },
+    previewImage(url) { this.imagePreviewUrl = url; this.imagePreviewVisible = true; },
+  },
+  mounted() { this.loadColumnSettings(); this.loadSummary(); }
+});
+app.use(ElementPlus);
+for (const [key, comp] of Object.entries(ElementPlusIconsVue)) { app.component(key, comp); }
+app.mount('#app');
+</script>
+</body>
+</html>
