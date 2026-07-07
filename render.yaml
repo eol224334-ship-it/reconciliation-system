@@ -1,16 +1,11 @@
-# Render Blueprint Configuration
+# Render Blueprint Configuration - Static Site
 # https://render.com/docs/blueprint-spec
-# 
-# Note: Free plan does not support persistent disks.
-# Data will be ephemeral (lost on redeploy) on the free plan.
-# Upgrade to Starter ($7/mo) and add a disk for persistent data.
 services:
   - type: web
     name: reconciliation-system
-    runtime: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    runtime: static
+    staticPublishPath: deploy
+    pullRequestPreviewsEnabled: false
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
