@@ -1,11 +1,17 @@
-# Render Blueprint Configuration - Static Site
-# https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: reconciliation-system
-    runtime: static
-    staticPublishPath: deploy
-    pullRequestPreviewsEnabled: false
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0: --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.9"
+        value: 3.11.9
+      - key: DB_PATH
+        value: /data/reconciliation.db
+    disk:
+      - name: data
+        mountPath: /data
+        sizeGB: 1
