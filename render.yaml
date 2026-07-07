@@ -1,5 +1,9 @@
 # Render Blueprint Configuration
 # https://render.com/docs/blueprint-spec
+# 
+# Note: Free plan does not support persistent disks.
+# Data will be ephemeral (lost on redeploy) on the free plan.
+# Upgrade to Starter ($7/mo) and add a disk for persistent data.
 services:
   - type: web
     name: reconciliation-system
@@ -9,12 +13,4 @@ services:
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: DB_PATH
-        value: /data/reconciliation.db
-      - key: UPLOAD_DIR
-        value: /data/uploads
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
+        value: "3.11.9"
