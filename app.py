@@ -1,5 +1,7 @@
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
+import urllib.parse
 import uuid
 import json
 import time
@@ -15,13 +17,8 @@ app = Flask(__name__)
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get('DB_PATH', os.path.join(BASE_DIR, 'reconciliation.db'))
 UPLOAD_DIR = os.environ.get('UPLOAD_DIR', os.path.join(BASE_DIR, 'static', 'uploads'))
-
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-db_parent = os.path.dirname(DB_PATH)
-if db_parent:
-    os.makedirs(db_parent, exist_ok=True)
 
 # ============================================================
 # Supported Currencies
@@ -52,94 +49,135 @@ CURRENCIES = {
 
 
 # ============================================================
-# Database
+# Database (PostgreSQL via Supabase)
 # ============================================================
 
+def _build_db_url():
+    """Build DATABASE_URL from individual env vars if not set directly."""
+    url = os.environ.get('DATABASE_URL')
+    if url:
+        return url
+    host = os.environ.get('DB_HOST', '')
+    port = os.environ.get('DB_PORT', '5432')
+    dbname = os.environ.get('DB_NAME', 'postgres')
+    user = os.environ.get('DB_USER', 'postgres')
+    password = os.environ.get('DB_PASSWORD', '')
+    if host and password:
+        return f"postgresql://{user}:{urllib.parse.quote(password)}@{host}:{port}/{dbname}"
+    return None
+
+DATABASE_URL = _build_db_url()
+
+
+class DB:
+    """Wrapper around psycopg2 connection for sqlite3-compatible API."""
+    def __init__(self, conn):
+        self.conn = conn
+        self.cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    def execute(self, sql, params=None):
+        # Auto-convert sqlite3 ? placeholders to psycopg2 %s
+        sql = sql.replace('?', '%s')
+        self.cur.execute(sql, params)
+        return self.cur
+
+    def executescript(self, script):
+        for stmt in script.split(';'):
+            stmt = stmt.strip()
+            if stmt:
+                self.cur.execute(stmt)
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.cur.close()
+        self.conn.close()
+
+
 def get_db():
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON")
-    db.execute("PRAGMA journal_mode = WAL")
-    return db
+    if not DATABASE_URL:
+        raise RuntimeError('DATABASE_URL or DB_HOST/DB_PASSWORD env var not set')
+    conn = psycopg2.connect(DATABASE_URL)
+    return DB(conn)
 
 
 def init_db():
     db = get_db()
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS evaluation_expense_ledger (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    statements = [
+        """CREATE TABLE IF NOT EXISTS evaluation_expense_ledger (
+            id SERIAL PRIMARY KEY,
             customer_name TEXT NOT NULL,
             payment_item TEXT NOT NULL DEFAULT 'FO-PLAN',
-            order_fee REAL NOT NULL DEFAULT 0,
-            commission REAL NOT NULL DEFAULT 0,
-            total_cost REAL GENERATED ALWAYS AS (order_fee + commission) STORED,
-            customer_paid REAL NOT NULL DEFAULT 0,
-            customer_unpaid REAL GENERATED ALWAYS AS (order_fee + commission - customer_paid) STORED,
+            order_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+            commission DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_cost DOUBLE PRECISION GENERATED ALWAYS AS (order_fee + commission) STORED,
+            customer_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
+            customer_unpaid DOUBLE PRECISION GENERATED ALWAYS AS (order_fee + commission - customer_paid) STORED,
             collection_date TEXT,
             customer_proof_url TEXT,
             ar_status TEXT NOT NULL DEFAULT 'pending',
-            product_paid REAL NOT NULL DEFAULT 0,
+            product_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
             product_payment_time TEXT,
             product_proof_url TEXT,
             product_ap_status TEXT NOT NULL DEFAULT 'pending',
             product_payment_currency TEXT,
-            commission_paid REAL NOT NULL DEFAULT 0,
+            commission_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
             commission_payment_time TEXT,
             commission_proof_url TEXT,
             commission_ap_status TEXT NOT NULL DEFAULT 'pending',
             commission_payment_currency TEXT,
-            fo_paid REAL NOT NULL DEFAULT 0,
-            fo_unpaid REAL GENERATED ALWAYS AS (order_fee + commission - fo_paid) STORED,
+            fo_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
+            fo_unpaid DOUBLE PRECISION GENERATED ALWAYS AS (order_fee + commission - fo_paid) STORED,
             fo_payment_time TEXT,
             fo_proof_url TEXT,
             ap_status TEXT NOT NULL DEFAULT 'pending',
             reconciliation_status TEXT NOT NULL DEFAULT 'open',
             currency TEXT NOT NULL DEFAULT 'IDR',
-            exchange_rate REAL NOT NULL DEFAULT 0.000460,
-            total_cost_cny REAL GENERATED ALWAYS AS ((order_fee + commission) * exchange_rate) STORED,
+            exchange_rate DOUBLE PRECISION NOT NULL DEFAULT 0.000460,
+            total_cost_cny DOUBLE PRECISION GENERATED ALWAYS AS ((order_fee + commission) * exchange_rate) STORED,
             remark TEXT,
             is_deleted INTEGER NOT NULL DEFAULT 0,
             deleted_at TEXT,
             created_by TEXT NOT NULL DEFAULT 'admin',
-            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id SERIAL PRIMARY KEY,
             table_name TEXT NOT NULL,
             record_id INTEGER NOT NULL,
             field_name TEXT NOT NULL,
             old_value TEXT,
             new_value TEXT,
             operator_name TEXT NOT NULL DEFAULT 'admin',
-            operated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS exchange_rate (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            operated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS exchange_rate (
+            id SERIAL PRIMARY KEY,
             from_currency TEXT NOT NULL,
             to_currency TEXT NOT NULL,
-            rate REAL NOT NULL,
+            rate DOUBLE PRECISION NOT NULL,
             rate_date TEXT NOT NULL,
             source TEXT NOT NULL DEFAULT 'manual',
-            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(from_currency, to_currency, rate_date)
-        );
-
-        CREATE TABLE IF NOT EXISTS sys_config (
+        )""",
+        """CREATE TABLE IF NOT EXISTS sys_config (
             key TEXT PRIMARY KEY,
             value TEXT,
-            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_ledger_customer ON evaluation_expense_ledger(customer_name)",
+        "CREATE INDEX IF NOT EXISTS idx_ledger_ar_status ON evaluation_expense_ledger(ar_status)",
+        "CREATE INDEX IF NOT EXISTS idx_ledger_ap_status ON evaluation_expense_ledger(ap_status)",
+        "CREATE INDEX IF NOT EXISTS idx_ledger_currency ON evaluation_expense_ledger(currency)",
+        "CREATE INDEX IF NOT EXISTS idx_ledger_created ON evaluation_expense_ledger(created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_record ON audit_log(table_name, record_id)",
+    ]
+    for stmt in statements:
+        db.execute(stmt)
 
-        CREATE INDEX IF NOT EXISTS idx_ledger_customer ON evaluation_expense_ledger(customer_name);
-        CREATE INDEX IF NOT EXISTS idx_ledger_ar_status ON evaluation_expense_ledger(ar_status);
-        CREATE INDEX IF NOT EXISTS idx_ledger_ap_status ON evaluation_expense_ledger(ap_status);
-        CREATE INDEX IF NOT EXISTS idx_ledger_currency ON evaluation_expense_ledger(currency);
-        CREATE INDEX IF NOT EXISTS idx_ledger_created ON evaluation_expense_ledger(created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_audit_record ON audit_log(table_name, record_id);
-    """)
     # Insert default exchange rates (to CNY) if not exist
     default_rates = [
         ('IDR', 'CNY', 0.000460), ('CNY', 'IDR', 2173.9130),
@@ -166,13 +204,13 @@ def init_db():
     today = date.today().isoformat()
     for frm, to, rate in default_rates:
         db.execute(
-            'INSERT OR IGNORE INTO exchange_rate (from_currency, to_currency, rate, rate_date, source) VALUES (?,?,?,?,?)',
+            'INSERT INTO exchange_rate (from_currency, to_currency, rate, rate_date, source) VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',
             (frm, to, rate, today, 'manual')
         )
     # Default Feishu config
-    db.execute('INSERT OR IGNORE INTO sys_config (key, value) VALUES (?, ?)', ('feishu_webhook_url', ''))
-    db.execute('INSERT OR IGNORE INTO sys_config (key, value) VALUES (?, ?)', ('feishu_webhook_secret', ''))
-    db.execute('INSERT OR IGNORE INTO sys_config (key, value) VALUES (?, ?)', ('feishu_enabled', 'false'))
+    db.execute("INSERT INTO sys_config (key, value) VALUES (%s, %s) ON CONFLICT DO NOTHING", ('feishu_webhook_url', ''))
+    db.execute("INSERT INTO sys_config (key, value) VALUES (%s, %s) ON CONFLICT DO NOTHING", ('feishu_webhook_secret', ''))
+    db.execute("INSERT INTO sys_config (key, value) VALUES (%s, %s) ON CONFLICT DO NOTHING", ('feishu_enabled', 'false'))
     db.commit()
     db.close()
 
@@ -180,16 +218,18 @@ def init_db():
 def migrate_db():
     """Add new columns for split FO payment and multi-currency."""
     db = get_db()
-    cols = db.execute("PRAGMA table_info(evaluation_expense_ledger)").fetchall()
-    col_names = [c['name'] for c in cols]
+    cols = db.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'evaluation_expense_ledger'"
+    ).fetchall()
+    col_names = [c['column_name'] for c in cols]
 
     new_cols = [
-        ('product_paid', 'REAL NOT NULL DEFAULT 0'),
+        ('product_paid', 'DOUBLE PRECISION NOT NULL DEFAULT 0'),
         ('product_payment_time', 'TEXT'),
         ('product_proof_url', 'TEXT'),
         ('product_ap_status', "TEXT NOT NULL DEFAULT 'pending'"),
         ('product_payment_currency', 'TEXT'),
-        ('commission_paid', 'REAL NOT NULL DEFAULT 0'),
+        ('commission_paid', 'DOUBLE PRECISION NOT NULL DEFAULT 0'),
         ('commission_payment_time', 'TEXT'),
         ('commission_proof_url', 'TEXT'),
         ('commission_ap_status', "TEXT NOT NULL DEFAULT 'pending'"),
@@ -206,11 +246,11 @@ def migrate_db():
 
 
 def row_to_dict(row):
-    return {k: row[k] for k in row.keys()} if row else None
+    return dict(row) if row else None
 
 
 def rows_to_dicts(rows):
-    return [row_to_dict(r) for r in rows]
+    return [dict(r) for r in rows]
 
 
 def fmt_amount(val):
@@ -228,7 +268,6 @@ def enrich_ledger(row):
     d['commission_unpaid'] = round(d['commission'] - d['commission_paid'], 2)
     d['fo_paid_total'] = round(d['product_paid'] + d['commission_paid'], 2)
     d['fo_unpaid_total'] = round(d['product_unpaid'] + d['commission_unpaid'], 2)
-    # Currency info
     cur = d.get('currency', 'IDR')
     d['currency_symbol'] = CURRENCIES.get(cur, {}).get('symbol', '')
     d['currency_name'] = CURRENCIES.get(cur, {}).get('name', cur)
@@ -240,13 +279,13 @@ def enrich_ledger(row):
 def recalc_status(db, ledger_id):
     """Recalculate AR/AP/reconciliation status based on payment amounts."""
     ledger = db.execute(
-        'SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)
+        'SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)
     ).fetchone()
     if not ledger:
         return
+    ledger = dict(ledger)
     total = ledger['order_fee'] + ledger['commission']
 
-    # AR status (customer payment)
     if ledger['customer_paid'] <= 0:
         ar = 'pending'
     elif ledger['customer_paid'] < total:
@@ -254,7 +293,6 @@ def recalc_status(db, ledger_id):
     else:
         ar = 'settled'
 
-    # Product AP status
     if ledger['product_paid'] <= 0:
         product_ap = 'pending'
     elif ledger['product_paid'] < ledger['order_fee']:
@@ -262,7 +300,6 @@ def recalc_status(db, ledger_id):
     else:
         product_ap = 'settled'
 
-    # Commission AP status
     if ledger['commission_paid'] <= 0:
         commission_ap = 'pending'
     elif ledger['commission_paid'] < ledger['commission']:
@@ -270,7 +307,6 @@ def recalc_status(db, ledger_id):
     else:
         commission_ap = 'settled'
 
-    # Overall AP status
     if product_ap == 'settled' and commission_ap == 'settled':
         ap = 'settled'
     elif product_ap == 'pending' and commission_ap == 'pending':
@@ -278,7 +314,6 @@ def recalc_status(db, ledger_id):
     else:
         ap = 'partial'
 
-    # Reconciliation status
     if ar == 'settled' and ap == 'settled':
         recon = 'completed'
     elif ar != 'pending' or ap != 'pending':
@@ -287,7 +322,7 @@ def recalc_status(db, ledger_id):
         recon = 'open'
 
     db.execute(
-        'UPDATE evaluation_expense_ledger SET ar_status=?, ap_status=?, product_ap_status=?, commission_ap_status=?, reconciliation_status=?, updated_at=? WHERE id=?',
+        'UPDATE evaluation_expense_ledger SET ar_status=%s, ap_status=%s, product_ap_status=%s, commission_ap_status=%s, reconciliation_status=%s, updated_at=%s WHERE id=%s',
         (ar, ap, product_ap, commission_ap, recon, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
 
@@ -296,7 +331,7 @@ def log_audit(db, table_name, record_id, field_name, old_val, new_val, operator=
     if str(old_val) == str(new_val):
         return
     db.execute(
-        'INSERT INTO audit_log (table_name, record_id, field_name, old_value, new_value, operator_name) VALUES (?,?,?,?,?,?)',
+        'INSERT INTO audit_log (table_name, record_id, field_name, old_value, new_value, operator_name) VALUES (%s,%s,%s,%s,%s,%s)',
         (table_name, record_id, field_name, str(old_val), str(new_val), operator)
     )
 
@@ -306,16 +341,16 @@ def log_audit(db, table_name, record_id, field_name, old_val, new_val, operator=
 # ============================================================
 
 def get_sys_config(db, key):
-    row = db.execute('SELECT value FROM sys_config WHERE key = ?', (key,)).fetchone()
+    row = db.execute('SELECT value FROM sys_config WHERE key = %s', (key,)).fetchone()
     return row['value'] if row else None
 
 
 def set_sys_config(db, key, value):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     db.execute(
-        'INSERT INTO sys_config (key, value, updated_at) VALUES (?, ?, ?) '
-        'ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?',
-        (key, str(value), datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-         str(value), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        'INSERT INTO sys_config (key, value, updated_at) VALUES (%s, %s, %s) '
+        'ON CONFLICT(key) DO UPDATE SET value = %s, updated_at = %s',
+        (key, str(value), now, str(value), now)
     )
 
 
@@ -326,10 +361,8 @@ def _gen_feishu_sign(timestamp, secret):
 
 
 def send_feishu_message(webhook_url, secret, title, content, template='blue'):
-    """Send a card message to Feishu group chat via webhook."""
     if not webhook_url:
         return False, 'Webhook URL is empty'
-
     payload = {
         "msg_type": "interactive",
         "card": {
@@ -343,12 +376,10 @@ def send_feishu_message(webhook_url, secret, title, content, template='blue'):
             ]
         }
     }
-
     if secret:
         timestamp = str(int(time.time()))
         payload['timestamp'] = timestamp
         payload['sign'] = _gen_feishu_sign(timestamp, secret)
-
     try:
         req = urllib.request.Request(
             webhook_url,
@@ -367,18 +398,14 @@ def send_feishu_message(webhook_url, secret, title, content, template='blue'):
 
 
 def notify_feishu(db, event_type, ledger, amount=None):
-    """Send a notification to Feishu for key events. Non-blocking, fails silently."""
     webhook_url = get_sys_config(db, 'feishu_webhook_url')
     enabled = get_sys_config(db, 'feishu_enabled')
     secret = get_sys_config(db, 'feishu_webhook_secret') or ''
-
     if not webhook_url or not enabled or enabled == 'false':
         return
-
     cur = ledger.get('currency', 'IDR')
     sym = CURRENCIES.get(cur, {}).get('symbol', '')
     amt_str = f'{fmt_amount(amount)} {sym}' if amount is not None else ''
-
     events = {
         'create': {
             'title': 'New Ledger Created',
@@ -420,26 +447,22 @@ def notify_feishu(db, event_type, ledger, amount=None):
             )
         }
     }
-
     cfg = events.get(event_type)
     if cfg:
         send_feishu_message(webhook_url, secret, cfg['title'], cfg['content'], cfg['template'])
 
 
 def push_summary_to_feishu(db):
-    """Push a daily summary to Feishu."""
     webhook_url = get_sys_config(db, 'feishu_webhook_url')
     secret = get_sys_config(db, 'feishu_webhook_secret') or ''
     if not webhook_url:
         return False, 'Webhook URL is empty'
-
     rows = db.execute('SELECT * FROM evaluation_expense_ledger WHERE is_deleted = 0').fetchall()
+    rows = [dict(r) for r in rows]
     total_receivable = sum(r['customer_unpaid'] for r in rows)
     total_payable = sum((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid']) for r in rows)
     total_receivable_cny = sum(r['customer_unpaid'] * r['exchange_rate'] for r in rows)
     total_payable_cny = sum(((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate'] for r in rows)
-
-    # Currency breakdown
     currency_map = {}
     for r in rows:
         cur = r['currency']
@@ -448,12 +471,10 @@ def push_summary_to_feishu(db):
         currency_map[cur]['count'] += 1
         currency_map[cur]['receivable'] += r['customer_unpaid']
         currency_map[cur]['payable'] += (r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])
-
     cur_lines = []
     for cur, info in sorted(currency_map.items()):
         sym = CURRENCIES.get(cur, {}).get('symbol', '')
         cur_lines.append(f'{cur}: {info["count"]} records | AR {fmt_amount(info["receivable"])} {sym} | AP {fmt_amount(info["payable"])} {sym}')
-
     content = (
         f'**Date**: {datetime.now().strftime("%Y-%m-%d %H:%M")}\n'
         f'**Total Records**: {len(rows)}\n\n'
@@ -478,26 +499,24 @@ def list_ledgers():
     ap_status = request.args.get('ap_status', '')
     recon_status = request.args.get('reconciliation_status', '')
     currency = request.args.get('currency', '')
-
     sql = 'SELECT * FROM evaluation_expense_ledger WHERE is_deleted = 0'
     params = []
     if customer:
-        sql += ' AND customer_name LIKE ?'
+        sql += ' AND customer_name LIKE %s'
         params.append(f'%{customer}%')
     if ar_status:
-        sql += ' AND ar_status = ?'
+        sql += ' AND ar_status = %s'
         params.append(ar_status)
     if ap_status:
-        sql += ' AND ap_status = ?'
+        sql += ' AND ap_status = %s'
         params.append(ap_status)
     if recon_status:
-        sql += ' AND reconciliation_status = ?'
+        sql += ' AND reconciliation_status = %s'
         params.append(recon_status)
     if currency:
-        sql += ' AND currency = ?'
+        sql += ' AND currency = %s'
         params.append(currency)
     sql += ' ORDER BY created_at DESC'
-
     rows = db.execute(sql, params).fetchall()
     db.close()
     return jsonify([enrich_ledger(r) for r in rows])
@@ -508,7 +527,6 @@ def create_ledger():
     data = request.json
     db = get_db()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
     cur = db.execute(
         """INSERT INTO evaluation_expense_ledger
            (customer_name, payment_item, order_fee, commission, customer_paid,
@@ -517,7 +535,8 @@ def create_ledger():
             commission_paid, commission_payment_time, commission_proof_url, commission_payment_currency,
             fo_paid, fo_payment_time, fo_proof_url,
             currency, exchange_rate, remark, created_by, updated_at, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           RETURNING id""",
         (
             data.get('customer_name', ''),
             data.get('payment_item', 'FO-PLAN'),
@@ -545,11 +564,10 @@ def create_ledger():
             now,
         )
     )
-    ledger_id = cur.lastrowid
+    ledger_id = cur.fetchone()['id']
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
     notify_feishu(db, 'create', enriched)
     db.commit()
@@ -560,7 +578,7 @@ def create_ledger():
 @app.route('/api/v1/ledgers/<int:ledger_id>', methods=['GET'])
 def get_ledger(ledger_id):
     db = get_db()
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     db.close()
     if not row:
         return jsonify({'error': 'Not found'}), 404
@@ -571,11 +589,11 @@ def get_ledger(ledger_id):
 def update_ledger(ledger_id):
     data = request.json
     db = get_db()
-    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-
+    old = dict(old)
     fields = [
         'customer_name', 'payment_item', 'order_fee', 'commission',
         'customer_paid', 'collection_date', 'customer_proof_url',
@@ -584,27 +602,23 @@ def update_ledger(ledger_id):
         'fo_paid', 'fo_payment_time', 'fo_proof_url',
         'currency', 'exchange_rate', 'remark'
     ]
-
     updates = []
     params = []
     for f in fields:
         if f in data:
-            old_val = old[f] if f in old.keys() else None
+            old_val = old.get(f)
             new_val = data[f]
             log_audit(db, 'evaluation_expense_ledger', ledger_id, f, old_val, new_val)
-            updates.append(f'{f} = ?')
+            updates.append(f'{f} = %s')
             params.append(new_val)
-
     if updates:
-        updates.append("updated_at = ?")
+        updates.append("updated_at = %s")
         params.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         params.append(ledger_id)
-        db.execute(f"UPDATE evaluation_expense_ledger SET {', '.join(updates)} WHERE id = ?", params)
-
+        db.execute(f"UPDATE evaluation_expense_ledger SET {', '.join(updates)} WHERE id = %s", params)
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     db.close()
     return jsonify(enrich_ledger(row))
 
@@ -614,7 +628,7 @@ def delete_ledger(ledger_id):
     db = get_db()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     db.execute(
-        'UPDATE evaluation_expense_ledger SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?',
+        'UPDATE evaluation_expense_ledger SET is_deleted = 1, deleted_at = %s, updated_at = %s WHERE id = %s',
         (now, now, ledger_id)
     )
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'is_deleted', 0, 1)
@@ -631,32 +645,29 @@ def delete_ledger(ledger_id):
 def customer_payment(ledger_id):
     data = request.json
     db = get_db()
-    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-
+    old = dict(old)
     new_paid = old['customer_paid'] + float(data.get('amount', 0))
     total = old['order_fee'] + old['commission']
     if new_paid > total:
         db.close()
         return jsonify({'error': 'Payment exceeds total cost', 'total': total, 'current_paid': old['customer_paid']}), 422
-
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'customer_paid', old['customer_paid'], new_paid)
     if data.get('collection_date'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'collection_date', old['collection_date'], data['collection_date'])
     if data.get('proof_url'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'customer_proof_url', old['customer_proof_url'], data['proof_url'])
-
     db.execute(
-        'UPDATE evaluation_expense_ledger SET customer_paid = ?, collection_date = ?, customer_proof_url = ?, updated_at = ? WHERE id = ?',
+        'UPDATE evaluation_expense_ledger SET customer_paid = %s, collection_date = %s, customer_proof_url = %s, updated_at = %s WHERE id = %s',
         (new_paid, data.get('collection_date', old['collection_date']), data.get('proof_url', old['customer_proof_url']),
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
     notify_feishu(db, 'customer_payment', enriched, float(data.get('amount', 0)))
     db.commit()
@@ -672,40 +683,33 @@ def customer_payment(ledger_id):
 def product_payment(ledger_id):
     data = request.json
     db = get_db()
-    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-
+    old = dict(old)
     if old['ar_status'] == 'pending':
         db.close()
         return jsonify({'error': 'Cannot pay before customer pays. AR status is still pending.'}), 409
-
     new_paid = old['product_paid'] + float(data.get('amount', 0))
     if new_paid > old['order_fee']:
         db.close()
         return jsonify({'error': 'Product payment exceeds order fee', 'order_fee': old['order_fee'], 'current_paid': old['product_paid']}), 422
-
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_paid', old['product_paid'], new_paid)
     if data.get('payment_time'):
-        old_pt = old['product_payment_time'] if 'product_payment_time' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_time', old_pt, data['payment_time'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_time', old.get('product_payment_time'), data['payment_time'])
     if data.get('proof_url'):
-        old_pu = old['product_proof_url'] if 'product_proof_url' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_proof_url', old_pu, data['proof_url'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_proof_url', old.get('product_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
-        old_pc = old['product_payment_currency'] if 'product_payment_currency' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_currency', old_pc, data['payment_currency'])
-
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_currency', old.get('product_payment_currency'), data['payment_currency'])
     db.execute(
-        'UPDATE evaluation_expense_ledger SET product_paid = ?, product_payment_time = ?, product_proof_url = ?, product_payment_currency = ?, updated_at = ? WHERE id = ?',
+        'UPDATE evaluation_expense_ledger SET product_paid = %s, product_payment_time = %s, product_proof_url = %s, product_payment_currency = %s, updated_at = %s WHERE id = %s',
         (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'),
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
     notify_feishu(db, 'product_payment', enriched, float(data.get('amount', 0)))
     db.commit()
@@ -721,40 +725,33 @@ def product_payment(ledger_id):
 def commission_payment(ledger_id):
     data = request.json
     db = get_db()
-    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-
+    old = dict(old)
     if old['ar_status'] == 'pending':
         db.close()
         return jsonify({'error': 'Cannot pay before customer pays. AR status is still pending.'}), 409
-
     new_paid = old['commission_paid'] + float(data.get('amount', 0))
     if new_paid > old['commission']:
         db.close()
         return jsonify({'error': 'Commission payment exceeds commission amount', 'commission': old['commission'], 'current_paid': old['commission_paid']}), 422
-
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_paid', old['commission_paid'], new_paid)
     if data.get('payment_time'):
-        old_ct = old['commission_payment_time'] if 'commission_payment_time' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_time', old_ct, data['payment_time'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_time', old.get('commission_payment_time'), data['payment_time'])
     if data.get('proof_url'):
-        old_cu = old['commission_proof_url'] if 'commission_proof_url' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_proof_url', old_cu, data['proof_url'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_proof_url', old.get('commission_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
-        old_cc = old['commission_payment_currency'] if 'commission_payment_currency' in old.keys() else None
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_currency', old_cc, data['payment_currency'])
-
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_currency', old.get('commission_payment_currency'), data['payment_currency'])
     db.execute(
-        'UPDATE evaluation_expense_ledger SET commission_paid = ?, commission_payment_time = ?, commission_proof_url = ?, commission_payment_currency = ?, updated_at = ? WHERE id = ?',
+        'UPDATE evaluation_expense_ledger SET commission_paid = %s, commission_payment_time = %s, commission_proof_url = %s, commission_payment_currency = %s, updated_at = %s WHERE id = %s',
         (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'),
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
     notify_feishu(db, 'commission_payment', enriched, float(data.get('amount', 0)))
     db.commit()
@@ -770,36 +767,32 @@ def commission_payment(ledger_id):
 def fo_payment(ledger_id):
     data = request.json
     db = get_db()
-    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ? AND is_deleted = 0', (ledger_id,)).fetchone()
+    old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:
         db.close()
         return jsonify({'error': 'Not found'}), 404
-
+    old = dict(old)
     if old['ar_status'] == 'pending':
         db.close()
         return jsonify({'error': 'Cannot pay FO before customer pays. AR status is still pending.'}), 409
-
     new_paid = old['fo_paid'] + float(data.get('amount', 0))
     total = old['order_fee'] + old['commission']
     if new_paid > total:
         db.close()
         return jsonify({'error': 'Payment exceeds total cost', 'total': total, 'current_paid': old['fo_paid']}), 422
-
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'fo_paid', old['fo_paid'], new_paid)
     if data.get('payment_time'):
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'fo_payment_time', old['fo_payment_time'], data['payment_time'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'fo_payment_time', old.get('fo_payment_time'), data['payment_time'])
     if data.get('proof_url'):
-        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'fo_proof_url', old['fo_proof_url'], data['proof_url'])
-
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'fo_proof_url', old.get('fo_proof_url'), data['proof_url'])
     db.execute(
-        'UPDATE evaluation_expense_ledger SET fo_paid = ?, fo_payment_time = ?, fo_proof_url = ?, updated_at = ? WHERE id = ?',
+        'UPDATE evaluation_expense_ledger SET fo_paid = %s, fo_payment_time = %s, fo_proof_url = %s, updated_at = %s WHERE id = %s',
         (new_paid, data.get('payment_time', old['fo_payment_time']), data.get('proof_url', old['fo_proof_url']),
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
     db.commit()
-
-    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = ?', (ledger_id,)).fetchone()
+    row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     db.close()
     return jsonify(enrich_ledger(row))
 
@@ -812,23 +805,22 @@ def fo_payment(ledger_id):
 def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
         return jsonify({'error': 'Only image files are allowed'}), 400
-
-    filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    file.save(filepath)
-
+    # Store as base64 data URI in database (persistent across restarts)
+    file_data = file.read()
+    mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif'}
+    mime = mime_map.get(ext, 'image/png')
+    b64 = base64.b64encode(file_data).decode('utf-8')
+    data_uri = f'data:{mime};base64,{b64}'
     return jsonify({
-        'url': f'/static/uploads/{filename}',
-        'filename': filename,
-        'size': os.path.getsize(filepath)
+        'url': data_uri,
+        'filename': f'{uuid.uuid4().hex[:8]}{ext}',
+        'size': len(file_data)
     }), 201
 
 
@@ -840,15 +832,13 @@ def upload_file():
 def dashboard_summary():
     db = get_db()
     rows = db.execute('SELECT * FROM evaluation_expense_ledger WHERE is_deleted = 0').fetchall()
-
+    rows = [dict(r) for r in rows]
     total_receivable = sum(r['customer_unpaid'] for r in rows)
     total_payable = sum((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid']) for r in rows)
     total_receivable_cny = sum(r['customer_unpaid'] * r['exchange_rate'] for r in rows)
     total_payable_cny = sum(((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate'] for r in rows)
-
     today = date.today().isoformat()
     overdue_ar = sum(r['customer_unpaid'] for r in rows if r['collection_date'] and r['collection_date'] < today and r['ar_status'] != 'settled')
-
     ar_counts = {
         'pending': len([r for r in rows if r['ar_status'] == 'pending']),
         'partial': len([r for r in rows if r['ar_status'] == 'partial']),
@@ -869,8 +859,6 @@ def dashboard_summary():
         'partial': len([r for r in rows if r['commission_ap_status'] == 'partial']),
         'settled': len([r for r in rows if r['commission_ap_status'] == 'settled']),
     }
-
-    # Currency breakdown
     currency_breakdown = {}
     for r in rows:
         cur = r['currency']
@@ -886,7 +874,6 @@ def dashboard_summary():
         currency_breakdown[cur]['payable'] += (r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])
         currency_breakdown[cur]['receivable_cny'] += r['customer_unpaid'] * r['exchange_rate']
         currency_breakdown[cur]['payable_cny'] += ((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate']
-
     db.close()
     return jsonify({
         'total_receivable': round(total_receivable, 2),
@@ -921,28 +908,29 @@ def add_rate():
     db = get_db()
     try:
         cur = db.execute(
-            'INSERT INTO exchange_rate (from_currency, to_currency, rate, rate_date, source) VALUES (?,?,?,?,?)',
+            'INSERT INTO exchange_rate (from_currency, to_currency, rate, rate_date, source) VALUES (%s,%s,%s,%s,%s) RETURNING id',
             (data['from_currency'], data['to_currency'], float(data['rate']), data['rate_date'], data.get('source', 'manual'))
         )
+        rid = cur.fetchone()['id']
         db.commit()
-        row = db.execute('SELECT * FROM exchange_rate WHERE id = ?', (cur.lastrowid,)).fetchone()
+        row = db.execute('SELECT * FROM exchange_rate WHERE id = %s', (rid,)).fetchone()
         db.close()
         return jsonify(row_to_dict(row)), 201
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
+        db.conn.rollback()
         db.close()
         return jsonify({'error': 'Rate already exists for this currency pair and date'}), 409
 
 
 @app.route('/api/v1/rates/latest', methods=['GET'])
 def get_latest_rate():
-    """Get the latest exchange rate for a currency pair."""
     frm = request.args.get('from', '')
     to = request.args.get('to', 'CNY')
     if not frm:
         return jsonify({'error': 'Missing "from" parameter'}), 400
     db = get_db()
     row = db.execute(
-        'SELECT * FROM exchange_rate WHERE from_currency = ? AND to_currency = ? ORDER BY rate_date DESC LIMIT 1',
+        'SELECT * FROM exchange_rate WHERE from_currency = %s AND to_currency = %s ORDER BY rate_date DESC LIMIT 1',
         (frm, to)
     ).fetchone()
     db.close()
@@ -969,15 +957,13 @@ def list_audit_logs():
     db = get_db()
     record_id = request.args.get('record_id', '')
     limit = min(int(request.args.get('limit', 100)), 500)
-
     sql = 'SELECT * FROM audit_log'
     params = []
     if record_id:
-        sql += ' WHERE record_id = ?'
+        sql += ' WHERE record_id = %s'
         params.append(record_id)
-    sql += ' ORDER BY operated_at DESC LIMIT ?'
+    sql += ' ORDER BY operated_at DESC LIMIT %s'
     params.append(limit)
-
     rows = db.execute(sql, params).fetchall()
     db.close()
     return jsonify(rows_to_dicts(rows))
@@ -1068,8 +1054,8 @@ def serve_upload(filename):
 init_db()
 migrate_db()
 print("=" * 50)
-print("  Financial Reconciliation System v3.0")
-print("  Database: ", DB_PATH)
+print("  Financial Reconciliation System v3.1 (PostgreSQL)")
+print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))
 print("=" * 50)
