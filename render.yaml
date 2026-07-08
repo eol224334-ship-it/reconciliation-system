@@ -9,3 +9,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: DB_HOST
+        value: db.lcapyhmmjbcwawadvjfm.supabase.co
+      - key: DB_PORT
+        value: '5432'
+      - key: DB_NAME
+        value: postgres
+      - key: DB_USER
+        value: postgres
+      - key: DB_PASSWORD
+        value: "Recon2026!@Supa#789"
