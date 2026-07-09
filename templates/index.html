@@ -157,6 +157,14 @@
     .dialog-warn-box { background: #fffbe6; border: 1px solid #ffe58f; border-radius: var(--radius); padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: #ad6800; display: flex; align-items: center; gap: 8px; }
 
     /* ===== Upload ===== */
+    .upload-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+    .upload-row .upload-preview-wrap { flex-shrink: 0; }
+    .upload-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 1px solid var(--border-color); border-radius: var(--radius); background: #fff; cursor: pointer; transition: all 0.2s; color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+    .upload-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: #f0f5ff; }
+    .upload-btn i { font-size: 15px; }
+    .upload-paste { flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius); padding: 9px 12px; min-height: 38px; background: #fff; color: var(--text-light); font-size: 13px; cursor: text; outline: none; display: flex; align-items: center; }
+    .upload-paste:focus { border-color: var(--color-primary); color: var(--text-primary); }
+    .upload-paste .placeholder { pointer-events: none; }
     .upload-zone { border: 2px dashed #d9d9d9; border-radius: var(--radius); padding: 16px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; outline: none; background: #fafafa; }
     .upload-zone:hover, .upload-zone:focus { border-color: var(--color-primary); background: #f0f5ff; }
     .upload-zone i { font-size: 24px; color: var(--text-light); margin-bottom: 6px; }
@@ -716,39 +724,57 @@
       </el-form-item>
       <div style="display:flex;gap:12px;">
         <el-form-item label="客户付款截图" style="flex:1;">
-          <div v-if="editProofs.customer_proof_url" class="upload-preview-wrap">
-            <img :src="editProofs.customer_proof_url">
-            <div class="remove-btn" @click="editProofs.customer_proof_url=''"><i class="fas fa-times"></i></div>
+          <div v-if="editProofs.customer_proof_url" class="upload-row">
+            <div class="upload-preview-wrap">
+              <img :src="editProofs.customer_proof_url">
+              <div class="remove-btn" @click="editProofs.customer_proof_url=''"><i class="fas fa-times"></i></div>
+            </div>
           </div>
-          <div v-else class="upload-zone" tabindex="0" @click="$refs.editCustomerProof.click()" @paste="handlePaste($event, editProofs, 'customer_proof_url')">
-            <i class="fas fa-cloud-arrow-up"></i>
-            <p>点击上传客户付款截图</p>
-            <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-            <input type="file" ref="editCustomerProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'customer_proof_url')">
+          <div v-else class="upload-row">
+            <div class="upload-btn" @click="$refs.editCustomerProof.click()">
+              <i class="fas fa-upload"></i>
+              <span>上传截图</span>
+              <input type="file" ref="editCustomerProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'customer_proof_url')">
+            </div>
+            <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'customer_proof_url')">
+              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            </div>
           </div>
         </el-form-item>
         <el-form-item label="货值付款截图" style="flex:1;">
-          <div v-if="editProofs.product_proof_url" class="upload-preview-wrap">
-            <img :src="editProofs.product_proof_url">
-            <div class="remove-btn" @click="editProofs.product_proof_url=''"><i class="fas fa-times"></i></div>
+          <div v-if="editProofs.product_proof_url" class="upload-row">
+            <div class="upload-preview-wrap">
+              <img :src="editProofs.product_proof_url">
+              <div class="remove-btn" @click="editProofs.product_proof_url=''"><i class="fas fa-times"></i></div>
+            </div>
           </div>
-          <div v-else class="upload-zone" tabindex="0" @click="$refs.editProductProof.click()" @paste="handlePaste($event, editProofs, 'product_proof_url')">
-            <i class="fas fa-cloud-arrow-up"></i>
-            <p>点击上传货值付款截图</p>
-            <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-            <input type="file" ref="editProductProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'product_proof_url')">
+          <div v-else class="upload-row">
+            <div class="upload-btn" @click="$refs.editProductProof.click()">
+              <i class="fas fa-upload"></i>
+              <span>上传截图</span>
+              <input type="file" ref="editProductProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'product_proof_url')">
+            </div>
+            <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'product_proof_url')">
+              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            </div>
           </div>
         </el-form-item>
         <el-form-item label="佣金付款截图" style="flex:1;">
-          <div v-if="editProofs.commission_proof_url" class="upload-preview-wrap">
-            <img :src="editProofs.commission_proof_url">
-            <div class="remove-btn" @click="editProofs.commission_proof_url=''"><i class="fas fa-times"></i></div>
+          <div v-if="editProofs.commission_proof_url" class="upload-row">
+            <div class="upload-preview-wrap">
+              <img :src="editProofs.commission_proof_url">
+              <div class="remove-btn" @click="editProofs.commission_proof_url=''"><i class="fas fa-times"></i></div>
+            </div>
           </div>
-          <div v-else class="upload-zone" tabindex="0" @click="$refs.editCommissionProof.click()" @paste="handlePaste($event, editProofs, 'commission_proof_url')">
-            <i class="fas fa-cloud-arrow-up"></i>
-            <p>点击上传佣金付款截图</p>
-            <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-            <input type="file" ref="editCommissionProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'commission_proof_url')">
+          <div v-else class="upload-row">
+            <div class="upload-btn" @click="$refs.editCommissionProof.click()">
+              <i class="fas fa-upload"></i>
+              <span>上传截图</span>
+              <input type="file" ref="editCommissionProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'commission_proof_url')">
+            </div>
+            <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'commission_proof_url')">
+              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            </div>
           </div>
         </el-form-item>
       </div>
@@ -774,15 +800,21 @@
         <el-date-picker v-model="payment.collection_date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="选择日期"></el-date-picker>
       </el-form-item>
       <el-form-item label="支付截图">
-        <div v-if="payment.proof_url" class="upload-preview-wrap">
-          <img :src="payment.proof_url">
-          <div class="remove-btn" @click="payment.proof_url=''"><i class="fas fa-times"></i></div>
+        <div v-if="payment.proof_url" class="upload-row">
+          <div class="upload-preview-wrap">
+            <img :src="payment.proof_url">
+            <div class="remove-btn" @click="payment.proof_url=''"><i class="fas fa-times"></i></div>
+          </div>
         </div>
-        <div v-else class="upload-zone" tabindex="0" @click="$refs.customerFile.click()" @paste="handlePaste($event, payment, 'proof_url')">
-          <i class="fas fa-cloud-arrow-up"></i>
-          <p>点击上传支付截图</p>
-          <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-          <input type="file" ref="customerFile" accept="image/*" style="display:none" @change="uploadFile($event, payment, 'proof_url')">
+        <div v-else class="upload-row">
+          <div class="upload-btn" @click="$refs.customerFile.click()">
+            <i class="fas fa-upload"></i>
+            <span>上传截图</span>
+            <input type="file" ref="customerFile" accept="image/*" style="display:none" @change="uploadFile($event, payment, 'proof_url')">
+          </div>
+          <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, payment, 'proof_url')">
+            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+          </div>
         </div>
       </el-form-item>
     </el-form>
@@ -816,15 +848,21 @@
         <el-date-picker v-model="productPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" placeholder="选择时间"></el-date-picker>
       </el-form-item>
       <el-form-item label="支付截图">
-        <div v-if="productPayment.proof_url" class="upload-preview-wrap">
-          <img :src="productPayment.proof_url">
-          <div class="remove-btn" @click="productPayment.proof_url=''"><i class="fas fa-times"></i></div>
+        <div v-if="productPayment.proof_url" class="upload-row">
+          <div class="upload-preview-wrap">
+            <img :src="productPayment.proof_url">
+            <div class="remove-btn" @click="productPayment.proof_url=''"><i class="fas fa-times"></i></div>
+          </div>
         </div>
-        <div v-else class="upload-zone" tabindex="0" @click="$refs.productFile.click()" @paste="handlePaste($event, productPayment, 'proof_url')">
-          <i class="fas fa-cloud-arrow-up"></i>
-          <p>点击上传支付截图</p>
-          <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-          <input type="file" ref="productFile" accept="image/*" style="display:none" @change="uploadFile($event, productPayment, 'proof_url')">
+        <div v-else class="upload-row">
+          <div class="upload-btn" @click="$refs.productFile.click()">
+            <i class="fas fa-upload"></i>
+            <span>上传截图</span>
+            <input type="file" ref="productFile" accept="image/*" style="display:none" @change="uploadFile($event, productPayment, 'proof_url')">
+          </div>
+          <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, productPayment, 'proof_url')">
+            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+          </div>
         </div>
       </el-form-item>
     </el-form>
@@ -858,15 +896,21 @@
         <el-date-picker v-model="commissionPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" placeholder="选择时间"></el-date-picker>
       </el-form-item>
       <el-form-item label="支付截图">
-        <div v-if="commissionPayment.proof_url" class="upload-preview-wrap">
-          <img :src="commissionPayment.proof_url">
-          <div class="remove-btn" @click="commissionPayment.proof_url=''"><i class="fas fa-times"></i></div>
+        <div v-if="commissionPayment.proof_url" class="upload-row">
+          <div class="upload-preview-wrap">
+            <img :src="commissionPayment.proof_url">
+            <div class="remove-btn" @click="commissionPayment.proof_url=''"><i class="fas fa-times"></i></div>
+          </div>
         </div>
-        <div v-else class="upload-zone" tabindex="0" @click="$refs.commissionFile.click()" @paste="handlePaste($event, commissionPayment, 'proof_url')">
-          <i class="fas fa-cloud-arrow-up"></i>
-          <p>点击上传支付截图</p>
-          <p class="upload-tip">点击此处后按 Ctrl+V 粘贴</p>
-          <input type="file" ref="commissionFile" accept="image/*" style="display:none" @change="uploadFile($event, commissionPayment, 'proof_url')">
+        <div v-else class="upload-row">
+          <div class="upload-btn" @click="$refs.commissionFile.click()">
+            <i class="fas fa-upload"></i>
+            <span>上传截图</span>
+            <input type="file" ref="commissionFile" accept="image/*" style="display:none" @change="uploadFile($event, commissionPayment, 'proof_url')">
+          </div>
+          <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, commissionPayment, 'proof_url')">
+            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+          </div>
         </div>
       </el-form-item>
     </el-form>
@@ -896,6 +940,7 @@ const app = createApp({
       sidebarOpen: false,
       loading: false,
       saving: false,
+      isRestoringDraft: false,
       ledgers: [],
       rates: [],
       auditLogs: [],
@@ -1020,6 +1065,29 @@ const app = createApp({
       const ap = { pending: '待付款', partial: '部分付款', settled: '已结清' };
       return type === 'ap' ? (ap[status] || status) : (ar[status] || status);
     },
+
+    saveDraft(key, payload) {
+      try {
+        if (this.isRestoringDraft) return;
+        localStorage.setItem('reconciliationDraft_' + key, JSON.stringify({ payload, savedAt: new Date().toISOString() }));
+      } catch(e) {}
+    },
+    loadDraft(key) {
+      try {
+        const saved = localStorage.getItem('reconciliationDraft_' + key);
+        if (!saved) return null;
+        const parsed = JSON.parse(saved);
+        // Draft older than 7 days is ignored
+        if (parsed.savedAt && new Date(parsed.savedAt).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000) {
+          localStorage.removeItem('reconciliationDraft_' + key);
+          return null;
+        }
+        return parsed.payload;
+      } catch(e) { return null; }
+    },
+    clearDraft(key) {
+      try { localStorage.removeItem('reconciliationDraft_' + key); } catch(e) {}
+    },
     switchTab(t) {
       this.tab = t;
       this.sidebarOpen = false;
@@ -1119,18 +1187,34 @@ const app = createApp({
 
     openCreate() {
       this.editing = false;
-      this.form = { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '' };
-      this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
+      this.isRestoringDraft = true;
+      const draft = this.loadDraft('create');
+      if (draft && draft.form) {
+        this.form = draft.form;
+        this.editProofs = draft.editProofs || { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
+      } else {
+        this.form = { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '' };
+        this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
+      }
+      this.isRestoringDraft = false;
       this.dialogVisible = true;
     },
     openEdit(row) {
       this.editing = true;
-      this.form = JSON.parse(JSON.stringify(row));
-      this.editProofs = {
-        customer_proof_url: row.customer_proof_url || '',
-        product_proof_url: row.product_proof_url || '',
-        commission_proof_url: row.commission_proof_url || ''
-      };
+      this.isRestoringDraft = true;
+      const draft = this.loadDraft('edit_' + row.id);
+      if (draft && draft.form) {
+        this.form = draft.form;
+        this.editProofs = draft.editProofs || { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
+      } else {
+        this.form = JSON.parse(JSON.stringify(row));
+        this.editProofs = {
+          customer_proof_url: row.customer_proof_url || '',
+          product_proof_url: row.product_proof_url || '',
+          commission_proof_url: row.commission_proof_url || ''
+        };
+      }
+      this.isRestoringDraft = false;
       this.dialogVisible = true;
     },
     async saveLedger() {
@@ -1158,10 +1242,12 @@ const app = createApp({
           const res = await fetch('/api/v1/ledgers/' + this.form.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
           if (!res.ok) throw new Error();
           ElementPlus.ElMessage.success('修改成功');
+          this.clearDraft('edit_' + this.form.id);
         } else {
           const res = await fetch('/api/v1/ledgers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
           if (!res.ok) throw new Error();
           ElementPlus.ElMessage.success('创建成功');
+          this.clearDraft('create');
         }
         this.dialogVisible = false;
         this.loadLedgers();
@@ -1174,7 +1260,14 @@ const app = createApp({
 
     openCustomerPayment(row) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
-      this.payment = { amount: row.customer_unpaid, collection_date: new Date().toISOString().slice(0,10), proof_url: row.customer_proof_url || '' };
+      this.isRestoringDraft = true;
+      const draft = this.loadDraft('payment_' + row.id);
+      if (draft && draft.payment) {
+        this.payment = draft.payment;
+      } else {
+        this.payment = { amount: row.customer_unpaid, collection_date: new Date().toISOString().slice(0,10), proof_url: row.customer_proof_url || '' };
+      }
+      this.isRestoringDraft = false;
       this.paymentDialogVisible = true;
     },
     async saveCustomerPayment() {
@@ -1194,6 +1287,7 @@ const app = createApp({
         });
         if (res.ok) {
           ElementPlus.ElMessage.success('收款记录成功');
+          this.clearDraft('payment_' + this.currentLedger.id);
           this.paymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
@@ -1209,7 +1303,14 @@ const app = createApp({
 
     openProductPayment(row) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
-      this.productPayment = { amount: row.product_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.product_proof_url || '', payment_currency: row.product_payment_currency || row.currency || 'IDR' };
+      this.isRestoringDraft = true;
+      const draft = this.loadDraft('product_' + row.id);
+      if (draft && draft.productPayment) {
+        this.productPayment = draft.productPayment;
+      } else {
+        this.productPayment = { amount: row.product_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.product_proof_url || '', payment_currency: row.product_payment_currency || row.currency || 'IDR' };
+      }
+      this.isRestoringDraft = false;
       this.productPaymentDialogVisible = true;
     },
     async saveProductPayment() {
@@ -1230,6 +1331,7 @@ const app = createApp({
         });
         if (res.ok) {
           ElementPlus.ElMessage.success('货值付款记录成功');
+          this.clearDraft('product_' + this.currentLedger.id);
           this.productPaymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
@@ -1245,7 +1347,14 @@ const app = createApp({
 
     openCommissionPayment(row) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
-      this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR' };
+      this.isRestoringDraft = true;
+      const draft = this.loadDraft('commission_' + row.id);
+      if (draft && draft.commissionPayment) {
+        this.commissionPayment = draft.commissionPayment;
+      } else {
+        this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR' };
+      }
+      this.isRestoringDraft = false;
       this.commissionPaymentDialogVisible = true;
     },
     async saveCommissionPayment() {
@@ -1266,6 +1375,7 @@ const app = createApp({
         });
         if (res.ok) {
           ElementPlus.ElMessage.success('佣金付款记录成功');
+          this.clearDraft('commission_' + this.currentLedger.id);
           this.commissionPaymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
@@ -1414,6 +1524,51 @@ const app = createApp({
         }
       } catch(e) {
         ElementPlus.ElMessage.error('网络错误');
+      }
+    },
+  },
+
+  watch: {
+    form: {
+      deep: true,
+      handler(val) {
+        if (this.dialogVisible) {
+          const key = this.editing ? 'edit_' + (val.id || '0') : 'create';
+          this.saveDraft(key, { form: val, editProofs: this.editProofs });
+        }
+      }
+    },
+    editProofs: {
+      deep: true,
+      handler(val) {
+        if (this.dialogVisible) {
+          const key = this.editing ? 'edit_' + (this.form.id || '0') : 'create';
+          this.saveDraft(key, { form: this.form, editProofs: val });
+        }
+      }
+    },
+    payment: {
+      deep: true,
+      handler(val) {
+        if (this.paymentDialogVisible && this.currentLedger) {
+          this.saveDraft('payment_' + this.currentLedger.id, { payment: val });
+        }
+      }
+    },
+    productPayment: {
+      deep: true,
+      handler(val) {
+        if (this.productPaymentDialogVisible && this.currentLedger) {
+          this.saveDraft('product_' + this.currentLedger.id, { productPayment: val });
+        }
+      }
+    },
+    commissionPayment: {
+      deep: true,
+      handler(val) {
+        if (this.commissionPaymentDialogVisible && this.currentLedger) {
+          this.saveDraft('commission_' + this.currentLedger.id, { commissionPayment: val });
+        }
       }
     },
   },
