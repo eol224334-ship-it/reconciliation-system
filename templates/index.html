@@ -488,8 +488,14 @@
               <el-table-column v-if="isColVisible('product_payment_time')" key="product_payment_time" prop="product_payment_time" label="货值付款时间" width="145"></el-table-column>
 
               <!-- Commission payment columns -->
-              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" label="佣金已付" width="110" align="right">
-                <template #default="{row}"><span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span><span v-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency" class="cur-tag">{{ row.commission_payment_currency }}</span></template>
+              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" label="佣金已付" width="130" align="right">
+                <template #default="{row}">
+                  <span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span>
+                  <div v-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency && row.exchange_rate" style="font-size:11px;color:var(--text-light);">
+                    ({{ fmt(row.commission_payment_currency === 'CNY' ? row.commission_paid * row.exchange_rate : row.commission_paid / row.exchange_rate, 2) }} {{ row.commission_payment_currency }})
+                  </div>
+                  <span v-else-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency" class="cur-tag">{{ row.commission_payment_currency }}</span>
+                </template>
               </el-table-column>
               <el-table-column v-if="isColVisible('commission_unpaid')" key="commission_unpaid" label="佣金未付" width="110" align="right">
                 <template #default="{row}"><span class="amount" :class="{neg: row.commission_unpaid>0}">{{ fmt(row.commission_unpaid) }}</span></template>
@@ -881,19 +887,26 @@
       <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
       <div class="row"><span>佣金：</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} {{ currentLedger.currency }}</b></div>
       <div class="row"><span>已付佣金：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div>
+      <div class="row" v-if="currentLedger.exchange_rate"><span>汇率：</span><b>1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} CNY</b></div>
     </div>
     <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
       客户尚未付款，建议先收款再付款给FO机构
     </div>
     <el-form :model="commissionPayment" label-width="100px">
-      <el-form-item label="付款金额" required>
-        <el-input-number v-model="commissionPayment.amount" :precision="2" :step="10000" :min="0.01" style="width:100%"></el-input-number>
-      </el-form-item>
       <el-form-item label="付款币种">
-        <el-select v-model="commissionPayment.payment_currency" style="width:100%" filterable>
+        <el-select v-model="commissionPayment.payment_currency" style="width:100%" filterable @change="onCommissionCurrencyChange">
           <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
         </el-select>
+      </el-form-item>
+      <el-form-item :label="commissionNeedsConversion ? '实付金额(' + commissionPayment.payment_currency + ')' : '付款金额'" required>
+        <el-input-number v-model="commissionPayment.amount" :precision="2" :step="commissionPayment.payment_currency === 'CNY' ? 100 : 10000" :min="0.01" style="width:100%"></el-input-number>
+      </el-form-item>
+      <el-form-item v-if="commissionNeedsConversion" label="折算佣金">
+        <div style="display:flex;flex-direction:column;gap:4px;padding:8px 12px;background:#f9f0ff;border-radius:6px;border:1px dashed #d3adf7;">
+          <span style="font-size:20px;font-weight:700;color:var(--color-purple);">≈ {{ fmt(commissionIdrEquivalent) }} {{ currentLedger.currency }}</span>
+          <span style="color:var(--text-light);font-size:12px;">按汇率 1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }} 自动换算</span>
+        </div>
       </el-form-item>
       <el-form-item label="付款时间">
         <el-date-picker v-model="commissionPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" placeholder="选择时间"></el-date-picker>
@@ -965,6 +978,7 @@ const app = createApp({
 
       commissionPaymentDialogVisible: false,
       commissionPayment: { amount: 0, payment_time: '', proof_url: '', payment_currency: '' },
+      _prevCommissionCur: '',
 
       imagePreviewVisible: false,
       imagePreviewUrl: '',
@@ -1017,7 +1031,7 @@ const app = createApp({
         { key: 'product_ap_status', label: '货值AP', width: 90, visible: true, group: '货值付款' },
         { key: 'product_proof', label: '货值付款截图', width: 90, visible: true, group: '货值付款' },
         { key: 'product_payment_time', label: '货值付款时间', width: 145, visible: false, group: '货值付款' },
-        { key: 'commission_paid', label: '佣金已付', width: 110, visible: true, group: '佣金付款' },
+        { key: 'commission_paid', label: '佣金已付', width: 130, visible: true, group: '佣金付款' },
         { key: 'commission_unpaid', label: '佣金未付', width: 110, visible: true, group: '佣金付款' },
         { key: 'commission_ap_status', label: '佣金AP', width: 90, visible: true, group: '佣金付款' },
         { key: 'commission_proof', label: '佣金付款截图', width: 90, visible: true, group: '佣金付款' },
@@ -1050,6 +1064,19 @@ const app = createApp({
         this.columnConfigVersion++;
         this.saveColumnSettings();
       }
+    },
+    commissionNeedsConversion() {
+      return this.currentLedger && this.commissionPayment.payment_currency && this.commissionPayment.payment_currency !== this.currentLedger.currency;
+    },
+    commissionIdrEquivalent() {
+      if (!this.commissionNeedsConversion) return this.commissionPayment.amount;
+      const rate = this.currentLedger.exchange_rate || 0.000460;
+      if (this.commissionPayment.payment_currency === 'CNY') {
+        return this.commissionPayment.amount / rate;
+      } else if (this.currentLedger.currency === 'CNY') {
+        return this.commissionPayment.amount * rate;
+      }
+      return this.commissionPayment.amount;
     }
   },
   methods: {
@@ -1367,7 +1394,14 @@ const app = createApp({
       this.currentLedger = JSON.parse(JSON.stringify(row));
       this.paymentEditMode = !!isEdit;
       if (isEdit) {
-        this.commissionPayment = { amount: row.commission_paid, payment_time: row.commission_payment_time || '', proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR' };
+        const payCur = row.commission_payment_currency || row.currency || 'IDR';
+        let amt = row.commission_paid;
+        if (payCur !== row.currency && row.exchange_rate) {
+          if (payCur === 'CNY') amt = row.commission_paid * row.exchange_rate;
+          else if (row.currency === 'CNY') amt = row.commission_paid / row.exchange_rate;
+        }
+        this.commissionPayment = { amount: parseFloat(amt.toFixed(2)), payment_time: row.commission_payment_time || '', proof_url: row.commission_proof_url || '', payment_currency: payCur };
+        this._prevCommissionCur = payCur;
         this.commissionPaymentDialogVisible = true;
         return;
       }
@@ -1378,21 +1412,38 @@ const app = createApp({
       } else {
         this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR' };
       }
+      this._prevCommissionCur = this.commissionPayment.payment_currency;
       this.isRestoringDraft = false;
       this.commissionPaymentDialogVisible = true;
+    },
+    onCommissionCurrencyChange(newCur) {
+      if (!this.currentLedger) return;
+      const prevCur = this._prevCommissionCur || this.currentLedger.currency;
+      const rate = this.currentLedger.exchange_rate || 0.000460;
+      let newAmt = this.commissionPayment.amount;
+      if (newCur !== prevCur) {
+        if (newCur === 'CNY' && prevCur !== 'CNY') {
+          newAmt = this.commissionPayment.amount * rate;
+        } else if (prevCur === 'CNY' && newCur !== 'CNY') {
+          newAmt = this.commissionPayment.amount / rate;
+        }
+      }
+      this.commissionPayment.amount = parseFloat(newAmt.toFixed(2));
+      this._prevCommissionCur = newCur;
     },
     async saveCommissionPayment() {
       if (!this.commissionPayment.amount || this.commissionPayment.amount <= 0) {
         ElementPlus.ElMessage.warning('请输入付款金额');
         return;
       }
+      const saveAmount = this.commissionNeedsConversion ? this.commissionIdrEquivalent : this.commissionPayment.amount;
       this.saving = true;
       try {
         const method = this.paymentEditMode ? 'PUT' : 'POST';
         const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/commission-payment', {
           method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
-            amount: this.commissionPayment.amount,
+            amount: saveAmount,
             payment_time: this.commissionPayment.payment_time,
             proof_url: this.commissionPayment.proof_url,
             payment_currency: this.commissionPayment.payment_currency,
