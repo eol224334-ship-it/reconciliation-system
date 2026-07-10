@@ -509,12 +509,15 @@
                 <template #default="{row}"><span style="color:var(--text-light);">&yen;{{ fmt(row.total_cost_cny, 2) }}</span></template>
               </el-table-column>
               <el-table-column v-if="isColVisible('remark')" key="remark" prop="remark" label="备注" width="120" show-overflow-tooltip></el-table-column>
-              <el-table-column v-if="isColVisible('actions')" key="actions" label="操作" width="320" fixed="right">
+              <el-table-column v-if="isColVisible('actions')" key="actions" label="操作" width="400" fixed="right">
                 <template #default="{row}">
-                  <el-button size="small" text @click="openEdit(row)"><i class="fas fa-pen"></i></el-button>
+                  <el-button size="small" text @click="openEdit(row)" title="编辑流水"><i class="fas fa-pen"></i></el-button>
                   <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> 收款</el-button>
+                  <el-button size="small" type="success" text @click="openCustomerPayment(row, true)" title="编辑收款" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
                   <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> 货值付款</el-button>
+                  <el-button size="small" type="warning" text @click="openProductPayment(row, true)" title="编辑货值付款" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
                   <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> 佣金付款</el-button>
+                  <el-button size="small" type="primary" text @click="openCommissionPayment(row, true)" title="编辑佣金付款" style="color:var(--color-purple);padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
                   <el-button size="small" type="danger" text @click="deleteLedger(row)"><i class="fas fa-trash"></i></el-button>
                 </template>
               </el-table-column>
@@ -786,7 +789,7 @@
   </el-dialog>
 
   <!-- ==================== Customer Payment Dialog ==================== -->
-  <el-dialog title="客户收款" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? '编辑收款' : '客户收款'" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box">
       <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
       <div class="row"><span>总费用：</span><b>{{ fmt(currentLedger.total_cost) }} {{ currentLedger.currency }}</b></div>
@@ -820,18 +823,18 @@
     </el-form>
     <template #footer>
       <el-button @click="paymentDialogVisible=false">取消</el-button>
-      <el-button type="primary" @click="saveCustomerPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>确认收款</el-button>
+      <el-button type="primary" @click="saveCustomerPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认收款' }}</el-button>
     </template>
   </el-dialog>
 
   <!-- ==================== Product Payment Dialog ==================== -->
-  <el-dialog title="货值付款" v-model="productPaymentDialogVisible" width="520px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? '编辑货值付款' : '货值付款'" v-model="productPaymentDialogVisible" width="520px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box">
       <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
       <div class="row"><span>货值/订单费：</span><b>{{ fmt(currentLedger.order_fee) }} {{ currentLedger.currency }}</b></div>
       <div class="row"><span>已付货值：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.product_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.product_unpaid) }}</b></div>
     </div>
-    <div v-if="currentLedger && currentLedger.ar_status==='pending'" class="dialog-warn-box">
+    <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
       客户尚未付款，建议先收款再付款给FO机构
     </div>
@@ -868,18 +871,18 @@
     </el-form>
     <template #footer>
       <el-button @click="productPaymentDialogVisible=false">取消</el-button>
-      <el-button type="warning" @click="saveProductPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>确认货值付款</el-button>
+      <el-button type="warning" @click="saveProductPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认货值付款' }}</el-button>
     </template>
   </el-dialog>
 
   <!-- ==================== Commission Payment Dialog ==================== -->
-  <el-dialog title="佣金付款" v-model="commissionPaymentDialogVisible" width="520px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? '编辑佣金付款' : '佣金付款'" v-model="commissionPaymentDialogVisible" width="520px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box" style="background:#f9f0ff;border-color:#d3adf7;">
       <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
       <div class="row"><span>佣金：</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} {{ currentLedger.currency }}</b></div>
       <div class="row"><span>已付佣金：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div>
     </div>
-    <div v-if="currentLedger && currentLedger.ar_status==='pending'" class="dialog-warn-box">
+    <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
       客户尚未付款，建议先收款再付款给FO机构
     </div>
@@ -916,7 +919,7 @@
     </el-form>
     <template #footer>
       <el-button @click="commissionPaymentDialogVisible=false">取消</el-button>
-      <el-button type="primary" @click="saveCommissionPayment" :loading="saving" style="background:var(--color-purple);border-color:var(--color-purple);"><i class="fas fa-check" style="margin-right:4px;"></i>确认佣金付款</el-button>
+      <el-button type="primary" @click="saveCommissionPayment" :loading="saving" style="background:var(--color-purple);border-color:var(--color-purple);"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认佣金付款' }}</el-button>
     </template>
   </el-dialog>
 
@@ -955,6 +958,7 @@ const app = createApp({
       paymentDialogVisible: false,
       currentLedger: null,
       payment: { amount: 0, collection_date: '', proof_url: '' },
+      paymentEditMode: false,
 
       productPaymentDialogVisible: false,
       productPayment: { amount: 0, payment_time: '', proof_url: '', payment_currency: '' },
@@ -1258,8 +1262,14 @@ const app = createApp({
       this.saving = false;
     },
 
-    openCustomerPayment(row) {
+    openCustomerPayment(row, isEdit) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
+      this.paymentEditMode = !!isEdit;
+      if (isEdit) {
+        this.payment = { amount: row.customer_paid, collection_date: row.collection_date || '', proof_url: row.customer_proof_url || '' };
+        this.paymentDialogVisible = true;
+        return;
+      }
       this.isRestoringDraft = true;
       const draft = this.loadDraft('payment_' + row.id);
       if (draft && draft.payment) {
@@ -1277,8 +1287,9 @@ const app = createApp({
       }
       this.saving = true;
       try {
+        const method = this.paymentEditMode ? 'PUT' : 'POST';
         const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/customer-payment', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
+          method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: this.payment.amount,
             collection_date: this.payment.collection_date,
@@ -1286,7 +1297,7 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success('收款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? '收款信息已更新' : '收款记录成功');
           this.clearDraft('payment_' + this.currentLedger.id);
           this.paymentDialogVisible = false;
           this.loadLedgers();
@@ -1301,8 +1312,14 @@ const app = createApp({
       this.saving = false;
     },
 
-    openProductPayment(row) {
+    openProductPayment(row, isEdit) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
+      this.paymentEditMode = !!isEdit;
+      if (isEdit) {
+        this.productPayment = { amount: row.product_paid, payment_time: row.product_payment_time || '', proof_url: row.product_proof_url || '', payment_currency: row.product_payment_currency || row.currency || 'IDR' };
+        this.productPaymentDialogVisible = true;
+        return;
+      }
       this.isRestoringDraft = true;
       const draft = this.loadDraft('product_' + row.id);
       if (draft && draft.productPayment) {
@@ -1320,8 +1337,9 @@ const app = createApp({
       }
       this.saving = true;
       try {
+        const method = this.paymentEditMode ? 'PUT' : 'POST';
         const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/product-payment', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
+          method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: this.productPayment.amount,
             payment_time: this.productPayment.payment_time,
@@ -1330,7 +1348,7 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success('货值付款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? '货值付款信息已更新' : '货值付款记录成功');
           this.clearDraft('product_' + this.currentLedger.id);
           this.productPaymentDialogVisible = false;
           this.loadLedgers();
@@ -1345,8 +1363,14 @@ const app = createApp({
       this.saving = false;
     },
 
-    openCommissionPayment(row) {
+    openCommissionPayment(row, isEdit) {
       this.currentLedger = JSON.parse(JSON.stringify(row));
+      this.paymentEditMode = !!isEdit;
+      if (isEdit) {
+        this.commissionPayment = { amount: row.commission_paid, payment_time: row.commission_payment_time || '', proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR' };
+        this.commissionPaymentDialogVisible = true;
+        return;
+      }
       this.isRestoringDraft = true;
       const draft = this.loadDraft('commission_' + row.id);
       if (draft && draft.commissionPayment) {
@@ -1364,8 +1388,9 @@ const app = createApp({
       }
       this.saving = true;
       try {
+        const method = this.paymentEditMode ? 'PUT' : 'POST';
         const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/commission-payment', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
+          method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: this.commissionPayment.amount,
             payment_time: this.commissionPayment.payment_time,
@@ -1374,7 +1399,7 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success('佣金付款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? '佣金付款信息已更新' : '佣金付款记录成功');
           this.clearDraft('commission_' + this.currentLedger.id);
           this.commissionPaymentDialogVisible = false;
           this.loadLedgers();
