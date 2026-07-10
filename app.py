@@ -641,7 +641,7 @@ def delete_ledger(ledger_id):
 # API: Customer Payment
 # ============================================================
 
-@app.route('/api/v1/ledgers/<int:ledger_id>/customer-payment', methods=['POST'])
+@app.route('/api/v1/ledgers/<int:ledger_id>/customer-payment', methods=['POST', 'PUT'])
 def customer_payment(ledger_id):
     data = request.json
     db = get_db()
@@ -650,7 +650,11 @@ def customer_payment(ledger_id):
         db.close()
         return jsonify({'error': 'Not found'}), 404
     old = dict(old)
-    new_paid = old['customer_paid'] + float(data.get('amount', 0))
+    is_edit = request.method == 'PUT'
+    if is_edit:
+        new_paid = float(data.get('amount', old['customer_paid']))
+    else:
+        new_paid = old['customer_paid'] + float(data.get('amount', 0))
     total = old['order_fee'] + old['commission']
     if new_paid > total:
         db.close()
@@ -658,7 +662,7 @@ def customer_payment(ledger_id):
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'customer_paid', old['customer_paid'], new_paid)
     if data.get('collection_date'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'collection_date', old['collection_date'], data['collection_date'])
-    if data.get('proof_url'):
+    if data.get('proof_url') is not None:
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'customer_proof_url', old['customer_proof_url'], data['proof_url'])
     db.execute(
         'UPDATE evaluation_expense_ledger SET customer_paid = %s, collection_date = %s, customer_proof_url = %s, updated_at = %s WHERE id = %s',
@@ -669,7 +673,8 @@ def customer_payment(ledger_id):
     db.commit()
     row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
-    notify_feishu(db, 'customer_payment', enriched, float(data.get('amount', 0)))
+    if not is_edit:
+        notify_feishu(db, 'customer_payment', enriched, float(data.get('amount', 0)))
     db.commit()
     db.close()
     return jsonify(enriched)
@@ -679,7 +684,7 @@ def customer_payment(ledger_id):
 # API: Product Value Payment
 # ============================================================
 
-@app.route('/api/v1/ledgers/<int:ledger_id>/product-payment', methods=['POST'])
+@app.route('/api/v1/ledgers/<int:ledger_id>/product-payment', methods=['POST', 'PUT'])
 def product_payment(ledger_id):
     data = request.json
     db = get_db()
@@ -688,17 +693,21 @@ def product_payment(ledger_id):
         db.close()
         return jsonify({'error': 'Not found'}), 404
     old = dict(old)
-    if old['ar_status'] == 'pending':
+    is_edit = request.method == 'PUT'
+    if not is_edit and old['ar_status'] == 'pending':
         db.close()
         return jsonify({'error': 'Cannot pay before customer pays. AR status is still pending.'}), 409
-    new_paid = old['product_paid'] + float(data.get('amount', 0))
+    if is_edit:
+        new_paid = float(data.get('amount', old['product_paid']))
+    else:
+        new_paid = old['product_paid'] + float(data.get('amount', 0))
     if new_paid > old['order_fee']:
         db.close()
         return jsonify({'error': 'Product payment exceeds order fee', 'order_fee': old['order_fee'], 'current_paid': old['product_paid']}), 422
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_paid', old['product_paid'], new_paid)
     if data.get('payment_time'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_time', old.get('product_payment_time'), data['payment_time'])
-    if data.get('proof_url'):
+    if data.get('proof_url') is not None:
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_proof_url', old.get('product_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_currency', old.get('product_payment_currency'), data['payment_currency'])
@@ -711,7 +720,8 @@ def product_payment(ledger_id):
     db.commit()
     row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
-    notify_feishu(db, 'product_payment', enriched, float(data.get('amount', 0)))
+    if not is_edit:
+        notify_feishu(db, 'product_payment', enriched, float(data.get('amount', 0)))
     db.commit()
     db.close()
     return jsonify(enriched)
@@ -721,7 +731,7 @@ def product_payment(ledger_id):
 # API: Commission Payment
 # ============================================================
 
-@app.route('/api/v1/ledgers/<int:ledger_id>/commission-payment', methods=['POST'])
+@app.route('/api/v1/ledgers/<int:ledger_id>/commission-payment', methods=['POST', 'PUT'])
 def commission_payment(ledger_id):
     data = request.json
     db = get_db()
@@ -730,17 +740,21 @@ def commission_payment(ledger_id):
         db.close()
         return jsonify({'error': 'Not found'}), 404
     old = dict(old)
-    if old['ar_status'] == 'pending':
+    is_edit = request.method == 'PUT'
+    if not is_edit and old['ar_status'] == 'pending':
         db.close()
         return jsonify({'error': 'Cannot pay before customer pays. AR status is still pending.'}), 409
-    new_paid = old['commission_paid'] + float(data.get('amount', 0))
+    if is_edit:
+        new_paid = float(data.get('amount', old['commission_paid']))
+    else:
+        new_paid = old['commission_paid'] + float(data.get('amount', 0))
     if new_paid > old['commission']:
         db.close()
         return jsonify({'error': 'Commission payment exceeds commission amount', 'commission': old['commission'], 'current_paid': old['commission_paid']}), 422
     log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_paid', old['commission_paid'], new_paid)
     if data.get('payment_time'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_time', old.get('commission_payment_time'), data['payment_time'])
-    if data.get('proof_url'):
+    if data.get('proof_url') is not None:
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_proof_url', old.get('commission_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_currency', old.get('commission_payment_currency'), data['payment_currency'])
@@ -753,7 +767,8 @@ def commission_payment(ledger_id):
     db.commit()
     row = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s', (ledger_id,)).fetchone()
     enriched = enrich_ledger(row)
-    notify_feishu(db, 'commission_payment', enriched, float(data.get('amount', 0)))
+    if not is_edit:
+        notify_feishu(db, 'commission_payment', enriched, float(data.get('amount', 0)))
     db.commit()
     db.close()
     return jsonify(enriched)
