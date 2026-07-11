@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>财务对账系统</title>
+  <title>Financial Reconciliation System</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.6/dist/index.css">
   <link rel="stylesheet" href="https://unpkg.com/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
   <style>
@@ -70,6 +70,8 @@
     .topbar-actions { display: flex; align-items: center; gap: 12px; }
     .topbar-user { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
     .topbar-user .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+    .lang-toggle { cursor: pointer; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; display: flex; align-items: center; gap: 4px; }
+    .lang-toggle:hover { border-color: var(--color-primary); color: var(--color-primary); background: #f0f5ff; }
 
     .content { padding: 24px; flex: 1; }
 
@@ -215,23 +217,23 @@
     <div class="sidebar" :class="{open: sidebarOpen}">
       <div class="sidebar-logo">
         <i class="fas fa-coins"></i>
-        <span>财务对账系统</span>
+        <span>{{ t('app.title') }}</span>
       </div>
       <div class="sidebar-menu">
         <div class="sidebar-item" :class="{active: tab==='dashboard'}" @click="switchTab('dashboard')">
-          <i class="fas fa-chart-pie"></i><span>财务看板</span>
+          <i class="fas fa-chart-pie"></i><span>{{ t('nav.dashboard') }}</span>
         </div>
         <div class="sidebar-item" :class="{active: tab==='ledgers'}" @click="switchTab('ledgers')">
-          <i class="fas fa-table-list"></i><span>对账流水</span>
+          <i class="fas fa-table-list"></i><span>{{ t('nav.ledgers') }}</span>
         </div>
         <div class="sidebar-item" :class="{active: tab==='rates'}" @click="switchTab('rates')">
-          <i class="fas fa-exchange-alt"></i><span>汇率管理</span>
+          <i class="fas fa-exchange-alt"></i><span>{{ t('nav.rates') }}</span>
         </div>
         <div class="sidebar-item" :class="{active: tab==='audit'}" @click="switchTab('audit')">
-          <i class="fas fa-shield-halved"></i><span>审计日志</span>
+          <i class="fas fa-shield-halved"></i><span>{{ t('nav.audit') }}</span>
         </div>
         <div class="sidebar-item" :class="{active: tab==='settings'}" @click="switchTab('settings')">
-          <i class="fas fa-gear"></i><span>系统设置</span>
+          <i class="fas fa-gear"></i><span>{{ t('nav.settings') }}</span>
         </div>
       </div>
       <div class="sidebar-footer">
@@ -248,7 +250,11 @@
           <span class="topbar-title">{{ pageTitle }}</span>
         </div>
         <div class="topbar-actions">
-          <el-button text @click="refreshData"><i class="fas fa-rotate"></i> 刷新</el-button>
+          <div class="lang-toggle" @click="toggleLang" :title="lang === 'zh' ? 'Switch to English' : '切换到中文'">
+            <i class="fas fa-language"></i>
+            <span>{{ lang === 'zh' ? 'EN' : '中文' }}</span>
+          </div>
+          <el-button text @click="refreshData"><i class="fas fa-rotate"></i> {{ t('btn.refresh') }}</el-button>
           <div class="topbar-user">
             <div class="avatar">A</div>
             <span>Admin</span>
@@ -264,87 +270,87 @@
           <div class="stat-grid">
             <div class="stat-card primary">
               <div class="stat-icon"><i class="fas fa-arrow-down-to-line"></i></div>
-              <div class="stat-label">应收总额 (多币种合计CNY)</div>
+              <div class="stat-label">{{ t('dash.receivable') }}</div>
               <div class="stat-value">&yen;{{ fmt(summary.total_receivable_cny, 2) }}</div>
-              <div class="stat-sub">原币合计: {{ fmt(summary.total_receivable) }}</div>
+              <div class="stat-sub">{{ t('dash.origTotal') }}: {{ fmt(summary.total_receivable) }}</div>
             </div>
             <div class="stat-card warning">
               <div class="stat-icon"><i class="fas fa-arrow-up-from-line"></i></div>
-              <div class="stat-label">应付总额 (多币种合计CNY)</div>
+              <div class="stat-label">{{ t('dash.payable') }}</div>
               <div class="stat-value">&yen;{{ fmt(summary.total_payable_cny, 2) }}</div>
-              <div class="stat-sub">原币合计: {{ fmt(summary.total_payable) }}</div>
+              <div class="stat-sub">{{ t('dash.origTotal') }}: {{ fmt(summary.total_payable) }}</div>
             </div>
             <div class="stat-card danger">
               <div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div>
-              <div class="stat-label">逾期应收</div>
+              <div class="stat-label">{{ t('dash.overdue') }}</div>
               <div class="stat-value">{{ fmt(summary.overdue_ar) }}</div>
-              <div class="stat-sub">客户超期未付</div>
+              <div class="stat-sub">{{ t('dash.overdueSub') }}</div>
             </div>
             <div class="stat-card purple">
               <div class="stat-icon"><i class="fas fa-database"></i></div>
-              <div class="stat-label">流水总数</div>
+              <div class="stat-label">{{ t('dash.records') }}</div>
               <div class="stat-value">{{ summary.total_records || 0 }}</div>
-              <div class="stat-sub">总记录数</div>
+              <div class="stat-sub">{{ t('dash.recordsSub') }}</div>
             </div>
           </div>
 
           <div class="dist-grid">
             <div class="card">
-              <div class="card-header"><h3><i class="fas fa-arrow-down-to-line" style="color:var(--color-primary);margin-right:8px;"></i>应收账款 (AR) 状态</h3></div>
+              <div class="card-header"><h3><i class="fas fa-arrow-down-to-line" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('dash.arStatus') }}</h3></div>
               <div class="card-body" style="padding:12px 20px;">
                 <div class="status-row">
                   <div class="status-dot info"></div>
-                  <div class="status-label">待核销</div>
+                  <div class="status-label">{{ t('status.ar.pending') }}</div>
                   <div class="status-count" style="color:#909399">{{ summary.ar_status_counts?.pending || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot warning"></div>
-                  <div class="status-label">部分收款</div>
+                  <div class="status-label">{{ t('status.ar.partial') }}</div>
                   <div class="status-count" style="color:var(--color-warning)">{{ summary.ar_status_counts?.partial || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot success"></div>
-                  <div class="status-label">已清算</div>
+                  <div class="status-label">{{ t('status.ar.settled') }}</div>
                   <div class="status-count" style="color:var(--color-success)">{{ summary.ar_status_counts?.settled || 0 }}</div>
                 </div>
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><h3><i class="fas fa-box" style="color:var(--color-warning);margin-right:8px;"></i>货值付款 (AP) 状态</h3></div>
+              <div class="card-header"><h3><i class="fas fa-box" style="color:var(--color-warning);margin-right:8px;"></i>{{ t('dash.apProduct') }}</h3></div>
               <div class="card-body" style="padding:12px 20px;">
                 <div class="status-row">
                   <div class="status-dot info"></div>
-                  <div class="status-label">待付款</div>
+                  <div class="status-label">{{ t('status.ap.pending') }}</div>
                   <div class="status-count" style="color:#909399">{{ summary.product_ap_counts?.pending || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot warning"></div>
-                  <div class="status-label">部分付款</div>
+                  <div class="status-label">{{ t('status.ap.partial') }}</div>
                   <div class="status-count" style="color:var(--color-warning)">{{ summary.product_ap_counts?.partial || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot success"></div>
-                  <div class="status-label">已结清</div>
+                  <div class="status-label">{{ t('status.ap.settled') }}</div>
                   <div class="status-count" style="color:var(--color-success)">{{ summary.product_ap_counts?.settled || 0 }}</div>
                 </div>
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><h3><i class="fas fa-hand-holding-dollar" style="color:var(--color-purple);margin-right:8px;"></i>佣金付款 (AP) 状态</h3></div>
+              <div class="card-header"><h3><i class="fas fa-hand-holding-dollar" style="color:var(--color-purple);margin-right:8px;"></i>{{ t('dash.apCommission') }}</h3></div>
               <div class="card-body" style="padding:12px 20px;">
                 <div class="status-row">
                   <div class="status-dot info"></div>
-                  <div class="status-label">待付款</div>
+                  <div class="status-label">{{ t('status.ap.pending') }}</div>
                   <div class="status-count" style="color:#909399">{{ summary.commission_ap_counts?.pending || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot warning"></div>
-                  <div class="status-label">部分付款</div>
+                  <div class="status-label">{{ t('status.ap.partial') }}</div>
                   <div class="status-count" style="color:var(--color-warning)">{{ summary.commission_ap_counts?.partial || 0 }}</div>
                 </div>
                 <div class="status-row">
                   <div class="status-dot success"></div>
-                  <div class="status-label">已结清</div>
+                  <div class="status-label">{{ t('status.ap.settled') }}</div>
                   <div class="status-count" style="color:var(--color-success)">{{ summary.commission_ap_counts?.settled || 0 }}</div>
                 </div>
               </div>
@@ -354,16 +360,16 @@
           <!-- Currency Breakdown -->
           <div v-if="summary.currency_breakdown && Object.keys(summary.currency_breakdown).length > 0" class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <h3><i class="fas fa-globe" style="color:var(--color-primary);margin-right:8px;"></i>按币种汇总</h3>
+              <h3><i class="fas fa-globe" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('dash.currencyBreakdown') }}</h3>
             </div>
             <div class="card-body" style="padding:12px 20px;">
               <div v-for="(info, cur) in summary.currency_breakdown" :key="cur" class="cur-row">
                 <span class="cur-badge">{{ cur }}</span>
                 <div class="cur-detail">
                   <b>{{ info.name }}</b> |
-                  {{ info.count }} 笔 |
-                  应收: <b>{{ fmt(info.receivable) }}</b> {{ info.symbol }} (&yen;{{ fmt(info.receivable_cny, 2) }}) |
-                  应付: <b>{{ fmt(info.payable) }}</b> {{ info.symbol }} (&yen;{{ fmt(info.payable_cny, 2) }})
+                  {{ info.count }} {{ t('dash.recordsUnit') }} |
+                  {{ t('dash.receivableLabel') }}: <b>{{ fmt(info.receivable) }}</b> {{ info.symbol }} (&yen;{{ fmt(info.receivable_cny, 2) }}) |
+                  {{ t('dash.payableLabel') }}: <b>{{ fmt(info.payable) }}</b> {{ info.symbol }} (&yen;{{ fmt(info.payable_cny, 2) }})
                 </div>
               </div>
             </div>
@@ -371,13 +377,13 @@
 
           <div class="card">
             <div class="card-header">
-              <h3><i class="fas fa-bolt" style="color:var(--color-primary);margin-right:8px;"></i>快速操作</h3>
+              <h3><i class="fas fa-bolt" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('dash.quickActions') }}</h3>
             </div>
             <div class="card-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>新增流水</el-button>
-              <el-button @click="switchTab('ledgers')"><i class="fas fa-table-list" style="margin-right:4px;"></i>查看明细</el-button>
-              <el-button @click="switchTab('rates')"><i class="fas fa-exchange-alt" style="margin-right:4px;"></i>管理汇率</el-button>
-              <el-button @click="switchTab('settings')"><i class="fas fa-gear" style="margin-right:4px;"></i>飞书设置</el-button>
+              <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newRecord') }}</el-button>
+              <el-button @click="switchTab('ledgers')"><i class="fas fa-table-list" style="margin-right:4px;"></i>{{ t('btn.viewDetails') }}</el-button>
+              <el-button @click="switchTab('rates')"><i class="fas fa-exchange-alt" style="margin-right:4px;"></i>{{ t('btn.manageRates') }}</el-button>
+              <el-button @click="switchTab('settings')"><i class="fas fa-gear" style="margin-right:4px;"></i>{{ t('btn.feishuSettings') }}</el-button>
             </div>
           </div>
         </div>
@@ -385,110 +391,110 @@
         <!-- ==================== Ledgers ==================== -->
         <div v-else-if="tab==='ledgers'" key="ledgers">
           <div class="filter-bar">
-            <el-input v-model="filter.customer_name" placeholder="搜索客户名称..." style="width:200px" clearable @clear="loadLedgers" @keyup.enter="loadLedgers">
+            <el-input v-model="filter.customer_name" :placeholder="t('ledger.searchPlaceholder')" style="width:200px" clearable @clear="loadLedgers" @keyup.enter="loadLedgers">
               <template #prefix><i class="fas fa-search" style="color:#c0c4cc;"></i></template>
             </el-input>
-            <el-select v-model="filter.currency" placeholder="币种" clearable filterable style="width:130px" @change="loadLedgers">
+            <el-select v-model="filter.currency" :placeholder="t('ledger.currency')" clearable filterable style="width:130px" @change="loadLedgers">
               <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
             </el-select>
-            <el-select v-model="filter.ar_status" placeholder="AR状态" clearable style="width:130px" @change="loadLedgers">
-              <el-option label="待核销" value="pending"></el-option>
-              <el-option label="部分收款" value="partial"></el-option>
-              <el-option label="已清算" value="settled"></el-option>
+            <el-select v-model="filter.ar_status" :placeholder="t('ledger.arStatus')" clearable style="width:130px" @change="loadLedgers">
+              <el-option :label="t('status.ar.pending')" value="pending"></el-option>
+              <el-option :label="t('status.ar.partial')" value="partial"></el-option>
+              <el-option :label="t('status.ar.settled')" value="settled"></el-option>
             </el-select>
-            <el-select v-model="filter.ap_status" placeholder="AP状态" clearable style="width:130px" @change="loadLedgers">
-              <el-option label="待付款" value="pending"></el-option>
-              <el-option label="部分付款" value="partial"></el-option>
-              <el-option label="已结清" value="settled"></el-option>
+            <el-select v-model="filter.ap_status" :placeholder="t('ledger.apStatus')" clearable style="width:130px" @change="loadLedgers">
+              <el-option :label="t('status.ap.pending')" value="pending"></el-option>
+              <el-option :label="t('status.ap.partial')" value="partial"></el-option>
+              <el-option :label="t('status.ap.settled')" value="settled"></el-option>
             </el-select>
-            <el-button type="primary" @click="loadLedgers"><i class="fas fa-filter" style="margin-right:4px;"></i>筛选</el-button>
-            <el-button @click="resetFilter">重置</el-button>
+            <el-button type="primary" @click="loadLedgers"><i class="fas fa-filter" style="margin-right:4px;"></i>{{ t('btn.filter') }}</el-button>
+            <el-button @click="resetFilter">{{ t('btn.reset') }}</el-button>
             <div style="flex:1"></div>
             <el-popover v-model:visible="columnSettingsVisible" placement="bottom-end" width="280" trigger="click" :show-arrow="false" popper-class="column-popover">
               <template #reference>
-                <el-button size="default"><i class="fas fa-columns" style="margin-right:4px;"></i>列设置</el-button>
+                <el-button size="default"><i class="fas fa-columns" style="margin-right:4px;"></i>{{ t('ledger.columnSettings') }}</el-button>
               </template>
               <div style="max-height:400px;overflow-y:auto;padding:4px;">
                 <div style="font-weight:600;margin-bottom:10px;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
-                  <span>自定义显示列</span>
-                  <el-button size="small" text type="primary" @click="resetColumnSettings">恢复默认</el-button>
+                  <span>{{ t('ledger.customColumns') }}</span>
+                  <el-button size="small" text type="primary" @click="resetColumnSettings">{{ t('btn.resetDefault') }}</el-button>
                 </div>
                 <div v-for="(cols, group) in columnGroups" :key="group" style="margin-bottom:14px;">
-                  <div style="font-size:12px;color:#909399;margin-bottom:6px;font-weight:600;">{{ group }}</div>
+                  <div style="font-size:12px;color:#909399;margin-bottom:6px;font-weight:600;">{{ t('group.' + group) }}</div>
                   <el-checkbox-group v-model="visibleColumnKeys" size="small" style="display:flex;flex-wrap:wrap;gap:6px;">
                     <el-checkbox v-for="col in cols" :key="col.key" :label="col.key" :disabled="col.key==='actions'" style="margin:0;">
-                      {{ col.label }}
+                      {{ t('col.' + col.key) }}
                     </el-checkbox>
                   </el-checkbox-group>
                 </div>
               </div>
             </el-popover>
-            <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>新增流水</el-button>
+            <el-button type="primary" @click="openCreate"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newRecord') }}</el-button>
           </div>
 
           <div class="table-wrap">
             <el-table :data="ledgers" stripe style="width:100%" v-loading="loading" max-height="620"
               :key="'ledger-table-' + columnConfigVersion"
               :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-              empty-text="暂无流水数据，点击右上角「新增流水」开始录入">
+              :empty-text="t('ledger.emptyText')">
               <el-table-column v-if="isColVisible('index')" key="index" type="index" width="50" label="#" fixed="left"></el-table-column>
-              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" label="客户名称" width="170" fixed="left" show-overflow-tooltip>
+              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" :label="t('col.customer_name')" width="170" fixed="left" show-overflow-tooltip>
                 <template #default="{row}">
                   <span style="font-weight:600;">{{ row.customer_name }}</span>
                 </template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('currency')" key="currency" label="币种" width="80" align="center">
+              <el-table-column v-if="isColVisible('currency')" key="currency" :label="t('col.currency')" width="80" align="center">
                 <template #default="{row}"><span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('payment_item')" key="payment_item" prop="payment_item" label="付款项目" width="100">
+              <el-table-column v-if="isColVisible('payment_item')" key="payment_item" prop="payment_item" :label="t('col.payment_item')" width="100">
                 <template #default="{row}"><el-tag size="small" effect="plain">{{ row.payment_item }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('order_fee')" key="order_fee" label="订单费(货值)" width="120" align="right">
+              <el-table-column v-if="isColVisible('order_fee')" key="order_fee" :label="t('col.order_fee')" width="120" align="right">
                 <template #default="{row}"><span class="amount">{{ fmt(row.order_fee) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission')" key="commission" label="佣金" width="90" align="right">
+              <el-table-column v-if="isColVisible('commission')" key="commission" :label="t('col.commission')" width="90" align="right">
                 <template #default="{row}"><span class="amount purple">{{ fmt(row.commission) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('total_cost')" key="total_cost" label="总费用" width="120" align="right">
+              <el-table-column v-if="isColVisible('total_cost')" key="total_cost" :label="t('col.total_cost')" width="120" align="right">
                 <template #default="{row}"><span class="amount total">{{ fmt(row.total_cost) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('customer_paid')" key="customer_paid" label="客户已付" width="110" align="right">
+              <el-table-column v-if="isColVisible('customer_paid')" key="customer_paid" :label="t('col.customer_paid')" width="110" align="right">
                 <template #default="{row}"><span class="amount pos">{{ fmt(row.customer_paid) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('customer_unpaid')" key="customer_unpaid" label="客户未付" width="110" align="right">
+              <el-table-column v-if="isColVisible('customer_unpaid')" key="customer_unpaid" :label="t('col.customer_unpaid')" width="110" align="right">
                 <template #default="{row}"><span class="amount" :class="{neg: row.customer_unpaid>0}">{{ fmt(row.customer_unpaid) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('ar_status')" key="ar_status" label="AR状态" width="95" align="center">
+              <el-table-column v-if="isColVisible('ar_status')" key="ar_status" :label="t('col.ar_status')" width="95" align="center">
                 <template #default="{row}"><el-tag :type="statusType(row.ar_status)" size="small" effect="light">{{ statusLabel(row.ar_status,'ar') }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('customer_proof')" key="customer_proof" label="客户付款截图" width="90" align="center">
+              <el-table-column v-if="isColVisible('customer_proof')" key="customer_proof" :label="t('col.customer_proof')" width="90" align="center">
                 <template #default="{row}">
                   <img v-if="row.customer_proof_url" :src="row.customer_proof_url" class="proof-thumb" @click="previewImage(row.customer_proof_url)">
                   <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
                 </template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('collection_date')" key="collection_date" prop="collection_date" label="收款日期" width="105"></el-table-column>
+              <el-table-column v-if="isColVisible('collection_date')" key="collection_date" prop="collection_date" :label="t('col.collection_date')" width="105"></el-table-column>
 
               <!-- Product payment columns -->
-              <el-table-column v-if="isColVisible('product_paid')" key="product_paid" label="货值已付" width="110" align="right">
+              <el-table-column v-if="isColVisible('product_paid')" key="product_paid" :label="t('col.product_paid')" width="110" align="right">
                 <template #default="{row}"><span class="amount pos">{{ fmt(row.product_paid) }}</span><span v-if="row.product_payment_currency && row.product_payment_currency !== row.currency" class="cur-tag">{{ row.product_payment_currency }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('product_unpaid')" key="product_unpaid" label="货值未付" width="110" align="right">
+              <el-table-column v-if="isColVisible('product_unpaid')" key="product_unpaid" :label="t('col.product_unpaid')" width="110" align="right">
                 <template #default="{row}"><span class="amount" :class="{neg: row.product_unpaid>0}">{{ fmt(row.product_unpaid) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('product_ap_status')" key="product_ap_status" label="货值AP" width="90" align="center">
+              <el-table-column v-if="isColVisible('product_ap_status')" key="product_ap_status" :label="t('col.product_ap_status')" width="90" align="center">
                 <template #default="{row}"><el-tag :type="statusType(row.product_ap_status)" size="small" effect="light">{{ statusLabel(row.product_ap_status,'ap') }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('product_proof')" key="product_proof" label="货值付款截图" width="90" align="center">
+              <el-table-column v-if="isColVisible('product_proof')" key="product_proof" :label="t('col.product_proof')" width="90" align="center">
                 <template #default="{row}">
                   <img v-if="row.product_proof_url" :src="row.product_proof_url" class="proof-thumb" @click="previewImage(row.product_proof_url)">
                   <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
                 </template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('product_payment_time')" key="product_payment_time" prop="product_payment_time" label="货值付款时间" width="145"></el-table-column>
+              <el-table-column v-if="isColVisible('product_payment_time')" key="product_payment_time" prop="product_payment_time" :label="t('col.product_payment_time')" width="145"></el-table-column>
 
               <!-- Commission payment columns -->
-              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" label="佣金已付" width="130" align="right">
+              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" :label="t('col.commission_paid')" width="130" align="right">
                 <template #default="{row}">
                   <span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span>
                   <div v-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency && row.exchange_rate" style="font-size:11px;color:var(--text-light);">
@@ -497,33 +503,33 @@
                   <span v-else-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency" class="cur-tag">{{ row.commission_payment_currency }}</span>
                 </template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission_unpaid')" key="commission_unpaid" label="佣金未付" width="110" align="right">
+              <el-table-column v-if="isColVisible('commission_unpaid')" key="commission_unpaid" :label="t('col.commission_unpaid')" width="110" align="right">
                 <template #default="{row}"><span class="amount" :class="{neg: row.commission_unpaid>0}">{{ fmt(row.commission_unpaid) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission_ap_status')" key="commission_ap_status" label="佣金AP" width="90" align="center">
+              <el-table-column v-if="isColVisible('commission_ap_status')" key="commission_ap_status" :label="t('col.commission_ap_status')" width="90" align="center">
                 <template #default="{row}"><el-tag :type="statusType(row.commission_ap_status)" size="small" effect="light">{{ statusLabel(row.commission_ap_status,'ap') }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" label="佣金付款截图" width="90" align="center">
+              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" :label="t('col.commission_proof')" width="90" align="center">
                 <template #default="{row}">
                   <img v-if="row.commission_proof_url" :src="row.commission_proof_url" class="proof-thumb" @click="previewImage(row.commission_proof_url)">
                   <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
                 </template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission_payment_time')" key="commission_payment_time" prop="commission_payment_time" label="佣金付款时间" width="145"></el-table-column>
+              <el-table-column v-if="isColVisible('commission_payment_time')" key="commission_payment_time" prop="commission_payment_time" :label="t('col.commission_payment_time')" width="145"></el-table-column>
 
-              <el-table-column v-if="isColVisible('total_cost_cny')" key="total_cost_cny" label="总费用(CNY)" width="100" align="right">
+              <el-table-column v-if="isColVisible('total_cost_cny')" key="total_cost_cny" :label="t('col.total_cost_cny')" width="100" align="right">
                 <template #default="{row}"><span style="color:var(--text-light);">&yen;{{ fmt(row.total_cost_cny, 2) }}</span></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('remark')" key="remark" prop="remark" label="备注" width="120" show-overflow-tooltip></el-table-column>
-              <el-table-column v-if="isColVisible('actions')" key="actions" label="操作" width="400" fixed="right">
+              <el-table-column v-if="isColVisible('remark')" key="remark" prop="remark" :label="t('col.remark')" width="120" show-overflow-tooltip></el-table-column>
+              <el-table-column v-if="isColVisible('actions')" key="actions" :label="t('col.actions')" width="400" fixed="right">
                 <template #default="{row}">
-                  <el-button size="small" text @click="openEdit(row)" title="编辑流水"><i class="fas fa-pen"></i></el-button>
-                  <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> 收款</el-button>
-                  <el-button size="small" type="success" text @click="openCustomerPayment(row, true)" title="编辑收款" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
-                  <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> 货值付款</el-button>
-                  <el-button size="small" type="warning" text @click="openProductPayment(row, true)" title="编辑货值付款" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
-                  <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> 佣金付款</el-button>
-                  <el-button size="small" type="primary" text @click="openCommissionPayment(row, true)" title="编辑佣金付款" style="color:var(--color-purple);padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                  <el-button size="small" text @click="openEdit(row)" :title="t('btn.editRecord')"><i class="fas fa-pen"></i></el-button>
+                  <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> {{ t('btn.receive') }}</el-button>
+                  <el-button size="small" type="success" text @click="openCustomerPayment(row, true)" :title="t('btn.editReceive')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                  <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> {{ t('btn.productPayment') }}</el-button>
+                  <el-button size="small" type="warning" text @click="openProductPayment(row, true)" :title="t('btn.editProductPayment')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                  <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> {{ t('btn.commissionPayment') }}</el-button>
+                  <el-button size="small" type="primary" text @click="openCommissionPayment(row, true)" :title="t('btn.editCommissionPayment')" style="color:var(--color-purple);padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
                   <el-button size="small" type="danger" text @click="deleteLedger(row)"><i class="fas fa-trash"></i></el-button>
                 </template>
               </el-table-column>
@@ -535,50 +541,50 @@
         <div v-else-if="tab==='rates'" key="rates">
           <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
             <div class="card">
-              <div class="card-header"><h3><i class="fas fa-list" style="color:var(--color-primary);margin-right:8px;"></i>汇率列表</h3></div>
+              <div class="card-header"><h3><i class="fas fa-list" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('rates.list') }}</h3></div>
               <el-table :data="rates" stripe style="width:100%" v-loading="loading"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-                empty-text="暂无汇率数据">
+                :empty-text="t('empty.noRates')">
                 <el-table-column type="index" width="50" label="#"></el-table-column>
-                <el-table-column prop="from_currency" label="源币种" width="100">
+                <el-table-column prop="from_currency" :label="t('rates.from')" width="100">
                   <template #default="{row}"><el-tag size="small">{{ row.from_currency }}</el-tag></template>
                 </el-table-column>
                 <el-table-column label="" width="30"><template #default><i class="fas fa-arrow-right" style="color:#c0c4cc;"></i></template></el-table-column>
-                <el-table-column prop="to_currency" label="目标币种" width="100">
+                <el-table-column prop="to_currency" :label="t('rates.to')" width="100">
                   <template #default="{row}"><el-tag size="small" type="success">{{ row.to_currency }}</el-tag></template>
                 </el-table-column>
-                <el-table-column label="汇率" width="150">
+                <el-table-column :label="t('rates.rate')" width="150">
                   <template #default="{row}"><span style="font-family:monospace;font-weight:700;font-size:14px;">{{ row.rate }}</span></template>
                 </el-table-column>
-                <el-table-column prop="rate_date" label="日期" width="120"></el-table-column>
-                <el-table-column prop="source" label="来源" width="80">
+                <el-table-column prop="rate_date" :label="t('rates.date')" width="120"></el-table-column>
+                <el-table-column prop="source" :label="t('rates.source')" width="80">
                   <template #default="{row}"><el-tag size="small" type="info" effect="plain">{{ row.source }}</el-tag></template>
                 </el-table-column>
-                <el-table-column prop="created_at" label="创建时间"></el-table-column>
+                <el-table-column prop="created_at" :label="t('rates.createdAt')"></el-table-column>
               </el-table>
             </div>
             <div class="card">
-              <div class="card-header"><h3><i class="fas fa-plus" style="color:var(--color-primary);margin-right:8px;"></i>新增汇率</h3></div>
+              <div class="card-header"><h3><i class="fas fa-plus" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('rates.add') }}</h3></div>
               <div class="card-body">
                 <el-form :model="newRate" label-width="80px">
-                  <el-form-item label="源币种">
+                  <el-form-item :label="t('rates.from')">
                     <el-select v-model="newRate.from_currency" style="width:100%" filterable>
                       <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
                     </el-select>
                   </el-form-item>
-                  <el-form-item label="目标币种">
+                  <el-form-item :label="t('rates.to')">
                     <el-select v-model="newRate.to_currency" style="width:100%" filterable>
                       <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
                     </el-select>
                   </el-form-item>
-                  <el-form-item label="汇率">
+                  <el-form-item :label="t('rates.rate')">
                     <el-input-number v-model="newRate.rate" :precision="6" :step="0.0001" :controls="false" style="width:100%"></el-input-number>
                   </el-form-item>
-                  <el-form-item label="日期">
+                  <el-form-item :label="t('rates.date')">
                     <el-date-picker v-model="newRate.rate_date" type="date" value-format="YYYY-MM-DD" style="width:100%"></el-date-picker>
                   </el-form-item>
                   <el-form-item>
-                    <el-button type="primary" @click="addRate" style="width:100%"><i class="fas fa-check" style="margin-right:6px;"></i>添加汇率</el-button>
+                    <el-button type="primary" @click="addRate" style="width:100%"><i class="fas fa-check" style="margin-right:6px;"></i>{{ t('btn.addRate') }}</el-button>
                   </el-form-item>
                 </el-form>
               </div>
@@ -590,31 +596,31 @@
         <div v-else-if="tab==='audit'" key="audit">
           <div class="card">
             <div class="card-header">
-              <h3><i class="fas fa-shield-halved" style="color:var(--color-primary);margin-right:8px;"></i>操作审计日志</h3>
-              <el-button size="small" @click="loadAuditLogs"><i class="fas fa-rotate" style="margin-right:4px;"></i>刷新</el-button>
+              <h3><i class="fas fa-shield-halved" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('audit.title') }}</h3>
+              <el-button size="small" @click="loadAuditLogs"><i class="fas fa-rotate" style="margin-right:4px;"></i>{{ t('btn.refresh') }}</el-button>
             </div>
             <el-table :data="auditLogs" stripe style="width:100%" v-loading="loading" max-height="620"
               :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-              empty-text="暂无审计日志">
+              :empty-text="t('empty.noAudit')">
               <el-table-column type="index" width="50" label="#"></el-table-column>
-              <el-table-column prop="operated_at" label="操作时间" width="170"></el-table-column>
-              <el-table-column prop="table_name" label="表名" width="200" show-overflow-tooltip>
+              <el-table-column prop="operated_at" :label="t('audit.time')" width="170"></el-table-column>
+              <el-table-column prop="table_name" :label="t('audit.table')" width="200" show-overflow-tooltip>
                 <template #default="{row}"><el-tag size="small" type="info" effect="plain">{{ row.table_name }}</el-tag></template>
               </el-table-column>
-              <el-table-column prop="record_id" label="记录ID" width="80" align="center">
+              <el-table-column prop="record_id" :label="t('audit.recordId')" width="80" align="center">
                 <template #default="{row}"><span style="font-family:monospace;font-weight:600;">#{{ row.record_id }}</span></template>
               </el-table-column>
-              <el-table-column prop="field_name" label="字段" width="160">
+              <el-table-column prop="field_name" :label="t('audit.field')" width="160">
                 <template #default="{row}"><span style="font-family:monospace;color:var(--color-primary);">{{ row.field_name }}</span></template>
               </el-table-column>
-              <el-table-column label="旧值" width="160" show-overflow-tooltip>
+              <el-table-column :label="t('audit.oldValue')" width="160" show-overflow-tooltip>
                 <template #default="{row}"><span style="color:var(--text-light);">{{ row.old_value || 'null' }}</span></template>
               </el-table-column>
               <el-table-column label="" width="30"><template #default><i class="fas fa-arrow-right" style="color:#c0c4cc;font-size:11px;"></i></template></el-table-column>
-              <el-table-column label="新值" width="160" show-overflow-tooltip>
+              <el-table-column :label="t('audit.newValue')" width="160" show-overflow-tooltip>
                 <template #default="{row}"><span style="color:var(--color-success);font-weight:600;">{{ row.new_value || 'null' }}</span></template>
               </el-table-column>
-              <el-table-column prop="operator_name" label="操作人" width="100">
+              <el-table-column prop="operator_name" :label="t('audit.operator')" width="100">
                 <template #default="{row}">
                   <div style="display:flex;align-items:center;gap:6px;">
                     <div style="width:24px;height:24px;border-radius:50%;background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;">{{ (row.operator_name||'A')[0].toUpperCase() }}</div>
@@ -630,49 +636,49 @@
         <div v-else-if="tab==='settings'" key="settings">
           <div class="card settings-card">
             <div class="card-header">
-              <h3><i class="fas fa-paper-plane" style="color:var(--color-primary);margin-right:8px;"></i>飞书通知配置</h3>
+              <h3><i class="fas fa-paper-plane" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('settings.title') }}</h3>
               <span :class="['feishu-status', feishuConfig.feishu_enabled ? 'on' : 'off']">
                 <i :class="feishuConfig.feishu_enabled ? 'fas fa-check-circle' : 'fas fa-circle-xmark'"></i>
-                {{ feishuConfig.feishu_enabled ? '已启用' : '未启用' }}
+                {{ feishuConfig.feishu_enabled ? t('settings.enabled') : t('settings.disabled') }}
               </span>
             </div>
             <div class="card-body">
               <el-form :model="feishuConfig" label-width="120px">
-                <el-form-item label="启用通知">
+                <el-form-item :label="t('settings.enableNotify')">
                   <el-switch v-model="feishuConfig.feishu_enabled"></el-switch>
-                  <span style="margin-left:12px;font-size:12px;color:var(--text-secondary);">开启后，收款/付款等操作会自动推送到飞书群</span>
+                  <span style="margin-left:12px;font-size:12px;color:var(--text-secondary);">{{ t('settings.notifyHint') }}</span>
                 </el-form-item>
                 <el-form-item label="Webhook URL">
                   <el-input v-model="feishuConfig.feishu_webhook_url" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx">
                     <template #prefix><i class="fas fa-link" style="color:#c0c4cc;"></i></template>
                   </el-input>
                 </el-form-item>
-                <el-form-item label="签名密钥">
-                  <el-input v-model="feishuConfig.feishu_webhook_secret" placeholder="可选，飞书机器人安全设置中的签名密钥" show-password>
+                <el-form-item :label="t('settings.secretKey')">
+                  <el-input v-model="feishuConfig.feishu_webhook_secret" :placeholder="t('settings.secretPlaceholder')" show-password>
                     <template #prefix><i class="fas fa-key" style="color:#c0c4cc;"></i></template>
                   </el-input>
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="saveFeishuConfig" :loading="saving"><i class="fas fa-save" style="margin-right:4px;"></i>保存配置</el-button>
-                  <el-button @click="testFeishuNotification" :disabled="!feishuConfig.feishu_webhook_url"><i class="fas fa-paper-plane" style="margin-right:4px;"></i>发送测试消息</el-button>
-                  <el-button @click="pushSummaryToFeishu" :disabled="!feishuConfig.feishu_webhook_url" type="warning"><i class="fas fa-chart-bar" style="margin-right:4px;"></i>推送今日汇总</el-button>
+                  <el-button type="primary" @click="saveFeishuConfig" :loading="saving"><i class="fas fa-save" style="margin-right:4px;"></i>{{ t('btn.saveConfig') }}</el-button>
+                  <el-button @click="testFeishuNotification" :disabled="!feishuConfig.feishu_webhook_url"><i class="fas fa-paper-plane" style="margin-right:4px;"></i>{{ t('btn.sendTest') }}</el-button>
+                  <el-button @click="pushSummaryToFeishu" :disabled="!feishuConfig.feishu_webhook_url" type="warning"><i class="fas fa-chart-bar" style="margin-right:4px;"></i>{{ t('btn.pushSummary') }}</el-button>
                 </el-form-item>
               </el-form>
 
               <div class="feishu-guide">
-                <b>飞书机器人配置指南：</b><br>
-                1. 打开飞书群聊 -> 点击群设置 -> 群机器人 -> 添加机器人 -> 选择「自定义机器人」<br>
-                2. 填写机器人名称和描述，安全设置可选择「签名校验」<br>
-                3. 复制 Webhook URL 填入上方输入框<br>
-                4. 如果开启了签名校验，将密钥也填入上方「签名密钥」<br>
-                5. 点击「保存配置」然后「发送测试消息」验证是否成功<br>
+                <b>{{ t('settings.guideTitle') }}</b><br>
+                {{ t('settings.guide1') }}<br>
+                {{ t('settings.guide2') }}<br>
+                {{ t('settings.guide3') }}<br>
+                {{ t('settings.guide4') }}<br>
+                {{ t('settings.guide5') }}<br>
                 <br>
-                <b>通知触发事件：</b><br>
-                - 新增对账流水 -> 蓝色卡片通知<br>
-                - 客户收款 -> 绿色卡片通知<br>
-                - 货值付款 -> 橙色卡片通知<br>
-                - 佣金付款 -> 紫色卡片通知<br>
-                - 手动推送汇总 -> 蓝色卡片通知（含各币种统计）
+                <b>{{ t('settings.eventsTitle') }}</b><br>
+                {{ t('settings.event1') }}<br>
+                {{ t('settings.event2') }}<br>
+                {{ t('settings.event3') }}<br>
+                {{ t('settings.event4') }}<br>
+                {{ t('settings.event5') }}
               </div>
             </div>
           </div>
@@ -684,20 +690,20 @@
   </div>
 
   <!-- ==================== Create/Edit Dialog ==================== -->
-  <el-dialog :title="editing ? '编辑流水' : '新增流水'" v-model="dialogVisible" width="680px" :close-on-click-modal="false">
+  <el-dialog :title="editing ? t('dialog.editRecord') : t('dialog.newRecord')" v-model="dialogVisible" width="680px" :close-on-click-modal="false">
     <el-form :model="form" label-width="110px">
-      <el-form-item label="客户名称" required>
-        <el-input v-model="form.customer_name" placeholder="如 Redragon Store Jatim">
+      <el-form-item :label="t('form.customerName')" required>
+        <el-input v-model="form.customer_name" placeholder="Redragon Store Jatim">
           <template #prefix><i class="fas fa-user" style="color:#c0c4cc;"></i></template>
         </el-input>
       </el-form-item>
       <div style="display:flex;gap:12px;">
-        <el-form-item label="交易币种" style="flex:1;">
+        <el-form-item :label="t('form.currency')" style="flex:1;">
           <el-select v-model="form.currency" style="width:100%" filterable @change="onCurrencyChange">
             <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="付款项目" style="flex:1;">
+        <el-form-item :label="t('form.paymentItem')" style="flex:1;">
           <el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option>
             <el-option label="FO-PLAN" value="FO-PLAN"></el-option>
             <el-option label="FO-PRO" value="FO-PRO"></el-option>
@@ -707,20 +713,20 @@
         </el-form-item>
       </div>
       <div style="display:flex;gap:12px;">
-        <el-form-item label="订单费/货值" style="flex:1;">
+        <el-form-item :label="t('form.orderFee')" style="flex:1;">
           <el-input-number v-model="form.order_fee" :precision="2" :step="100000" :min="0" style="width:100%" :controls="true"></el-input-number>
         </el-form-item>
-        <el-form-item label="佣金" style="flex:1;">
+        <el-form-item :label="t('form.commission')" style="flex:1;">
           <el-input-number v-model="form.commission" :precision="2" :step="10000" :min="0" style="width:100%" :controls="true"></el-input-number>
         </el-form-item>
       </div>
-      <el-form-item :label="'汇率 (' + form.currency + ' to CNY)'">
+      <el-form-item :label="t('form.exchangeRate') + ' (' + form.currency + ' to CNY)'">
         <el-input-number v-model="form.exchange_rate" :precision="6" :step="0.0001" :min="0" style="width:100%" :controls="false"></el-input-number>
       </el-form-item>
-      <el-form-item label="备注">
-        <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="可选备注信息"></el-input>
+      <el-form-item :label="t('form.remark')">
+        <el-input v-model="form.remark" type="textarea" :rows="2" :placeholder="t('form.remarkPlaceholder')"></el-input>
       </el-form-item>
-      <el-form-item label="总费用预览">
+      <el-form-item :label="t('form.totalPreview')">
         <div style="background:#f0f5ff;border:1px solid #adc6ff;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
           <div>
             <span style="font-size:22px;font-weight:700;color:var(--color-primary);">{{ fmt((form.order_fee||0) + (form.commission||0)) }}</span>
@@ -732,7 +738,7 @@
         </div>
       </el-form-item>
       <div style="display:flex;gap:12px;">
-        <el-form-item label="客户付款截图" style="flex:1;">
+        <el-form-item :label="t('form.customerProof')" style="flex:1;">
           <div v-if="editProofs.customer_proof_url" class="upload-row">
             <div class="upload-preview-wrap">
               <img :src="editProofs.customer_proof_url">
@@ -742,15 +748,15 @@
           <div v-else class="upload-row">
             <div class="upload-btn" @click="$refs.editCustomerProof.click()">
               <i class="fas fa-upload"></i>
-              <span>上传截图</span>
+              <span>{{ t('btn.upload') }}</span>
               <input type="file" ref="editCustomerProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'customer_proof_url')">
             </div>
             <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'customer_proof_url')">
-              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+              <span class="placeholder">{{ t('paste.hint') }}</span>
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="货值付款截图" style="flex:1;">
+        <el-form-item :label="t('form.productProof')" style="flex:1;">
           <div v-if="editProofs.product_proof_url" class="upload-row">
             <div class="upload-preview-wrap">
               <img :src="editProofs.product_proof_url">
@@ -760,15 +766,15 @@
           <div v-else class="upload-row">
             <div class="upload-btn" @click="$refs.editProductProof.click()">
               <i class="fas fa-upload"></i>
-              <span>上传截图</span>
+              <span>{{ t('btn.upload') }}</span>
               <input type="file" ref="editProductProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'product_proof_url')">
             </div>
             <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'product_proof_url')">
-              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+              <span class="placeholder">{{ t('paste.hint') }}</span>
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="佣金付款截图" style="flex:1;">
+        <el-form-item :label="t('form.commissionProof')" style="flex:1;">
           <div v-if="editProofs.commission_proof_url" class="upload-row">
             <div class="upload-preview-wrap">
               <img :src="editProofs.commission_proof_url">
@@ -778,37 +784,37 @@
           <div v-else class="upload-row">
             <div class="upload-btn" @click="$refs.editCommissionProof.click()">
               <i class="fas fa-upload"></i>
-              <span>上传截图</span>
+              <span>{{ t('btn.upload') }}</span>
               <input type="file" ref="editCommissionProof" accept="image/*" style="display:none" @change="uploadFile($event, editProofs, 'commission_proof_url')">
             </div>
             <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, editProofs, 'commission_proof_url')">
-              <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+              <span class="placeholder">{{ t('paste.hint') }}</span>
             </div>
           </div>
         </el-form-item>
       </div>
     </el-form>
     <template #footer>
-      <el-button @click="dialogVisible=false">取消</el-button>
-      <el-button type="primary" @click="saveLedger" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ editing ? '保存修改' : '创建流水' }}</el-button>
+      <el-button @click="dialogVisible=false">{{ t('btn.cancel') }}</el-button>
+      <el-button type="primary" @click="saveLedger" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ editing ? t('btn.saveChanges') : t('btn.createRecord') }}</el-button>
     </template>
   </el-dialog>
 
   <!-- ==================== Customer Payment Dialog ==================== -->
-  <el-dialog :title="paymentEditMode ? '编辑收款' : '客户收款'" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? t('dialog.editReceive') : t('dialog.customerPayment')" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box">
-      <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
-      <div class="row"><span>总费用：</span><b>{{ fmt(currentLedger.total_cost) }} {{ currentLedger.currency }}</b></div>
-      <div class="row"><span>已付：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.customer_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.customer_unpaid) }}</b></div>
+      <div class="row"><span>{{ t('pay.customer') }}</span><b>{{ currentLedger.customer_name }}</b></div>
+      <div class="row"><span>{{ t('pay.totalCost') }}</span><b>{{ fmt(currentLedger.total_cost) }} {{ currentLedger.currency }}</b></div>
+      <div class="row"><span>{{ t('pay.paid') }}</span><b style="color:var(--color-success);">{{ fmt(currentLedger.customer_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>{{ t('pay.unpaid') }}</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.customer_unpaid) }}</b></div>
     </div>
     <el-form :model="payment" label-width="100px">
-      <el-form-item label="收款金额" required>
+      <el-form-item :label="t('form.receiveAmount')" required>
         <el-input-number v-model="payment.amount" :precision="2" :step="100000" :min="0.01" style="width:100%"></el-input-number>
       </el-form-item>
-      <el-form-item label="收款日期">
-        <el-date-picker v-model="payment.collection_date" type="date" value-format="YYYY-MM-DD" style="width:100%" placeholder="选择日期"></el-date-picker>
+      <el-form-item :label="t('form.collectionDate')">
+        <el-date-picker v-model="payment.collection_date" type="date" value-format="YYYY-MM-DD" style="width:100%" :placeholder="t('date.pickDate')"></el-date-picker>
       </el-form-item>
-      <el-form-item label="支付截图">
+      <el-form-item :label="t('form.paymentProof')">
         <div v-if="payment.proof_url" class="upload-row">
           <div class="upload-preview-wrap">
             <img :src="payment.proof_url">
@@ -818,45 +824,45 @@
         <div v-else class="upload-row">
           <div class="upload-btn" @click="$refs.customerFile.click()">
             <i class="fas fa-upload"></i>
-            <span>上传截图</span>
+            <span>{{ t('btn.upload') }}</span>
             <input type="file" ref="customerFile" accept="image/*" style="display:none" @change="uploadFile($event, payment, 'proof_url')">
           </div>
           <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, payment, 'proof_url')">
-            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            <span class="placeholder">{{ t('paste.hint') }}</span>
           </div>
         </div>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="paymentDialogVisible=false">取消</el-button>
-      <el-button type="primary" @click="saveCustomerPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认收款' }}</el-button>
+      <el-button @click="paymentDialogVisible=false">{{ t('btn.cancel') }}</el-button>
+      <el-button type="primary" @click="saveCustomerPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? t('btn.saveChanges') : t('btn.confirmReceive') }}</el-button>
     </template>
   </el-dialog>
 
   <!-- ==================== Product Payment Dialog ==================== -->
-  <el-dialog :title="paymentEditMode ? '编辑货值付款' : '货值付款'" v-model="productPaymentDialogVisible" width="520px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? t('dialog.editProductPayment') : t('dialog.productPayment')" v-model="productPaymentDialogVisible" width="520px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box">
-      <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
-      <div class="row"><span>货值/订单费：</span><b>{{ fmt(currentLedger.order_fee) }} {{ currentLedger.currency }}</b></div>
-      <div class="row"><span>已付货值：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.product_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.product_unpaid) }}</b></div>
+      <div class="row"><span>{{ t('pay.customer') }}</span><b>{{ currentLedger.customer_name }}</b></div>
+      <div class="row"><span>{{ t('pay.productFee') }}</span><b>{{ fmt(currentLedger.order_fee) }} {{ currentLedger.currency }}</b></div>
+      <div class="row"><span>{{ t('pay.productPaid') }}</span><b style="color:var(--color-success);">{{ fmt(currentLedger.product_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>{{ t('pay.unpaid') }}</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.product_unpaid) }}</b></div>
     </div>
     <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
-      客户尚未付款，建议先收款再付款给FO机构
+      {{ t('warn.customerNotPaid') }}
     </div>
     <el-form :model="productPayment" label-width="100px">
-      <el-form-item label="付款金额" required>
+      <el-form-item :label="t('form.paymentAmount')" required>
         <el-input-number v-model="productPayment.amount" :precision="2" :step="100000" :min="0.01" style="width:100%"></el-input-number>
       </el-form-item>
-      <el-form-item label="付款币种">
+      <el-form-item :label="t('form.paymentCurrency')">
         <el-select v-model="productPayment.payment_currency" style="width:100%" filterable>
           <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
         </el-select>
       </el-form-item>
-      <el-form-item label="付款时间">
-        <el-date-picker v-model="productPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" placeholder="选择时间"></el-date-picker>
+      <el-form-item :label="t('form.paymentTime')">
+        <el-date-picker v-model="productPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" :placeholder="t('time.pickTime')"></el-date-picker>
       </el-form-item>
-      <el-form-item label="支付截图">
+      <el-form-item :label="t('form.paymentProof')">
         <div v-if="productPayment.proof_url" class="upload-row">
           <div class="upload-preview-wrap">
             <img :src="productPayment.proof_url">
@@ -866,52 +872,52 @@
         <div v-else class="upload-row">
           <div class="upload-btn" @click="$refs.productFile.click()">
             <i class="fas fa-upload"></i>
-            <span>上传截图</span>
+            <span>{{ t('btn.upload') }}</span>
             <input type="file" ref="productFile" accept="image/*" style="display:none" @change="uploadFile($event, productPayment, 'proof_url')">
           </div>
           <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, productPayment, 'proof_url')">
-            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            <span class="placeholder">{{ t('paste.hint') }}</span>
           </div>
         </div>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="productPaymentDialogVisible=false">取消</el-button>
-      <el-button type="warning" @click="saveProductPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认货值付款' }}</el-button>
+      <el-button @click="productPaymentDialogVisible=false">{{ t('btn.cancel') }}</el-button>
+      <el-button type="warning" @click="saveProductPayment" :loading="saving"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? t('btn.saveChanges') : t('btn.confirmProductPayment') }}</el-button>
     </template>
   </el-dialog>
 
   <!-- ==================== Commission Payment Dialog ==================== -->
-  <el-dialog :title="paymentEditMode ? '编辑佣金付款' : '佣金付款'" v-model="commissionPaymentDialogVisible" width="520px" :close-on-click-modal="false">
+  <el-dialog :title="paymentEditMode ? t('dialog.editCommissionPayment') : t('dialog.commissionPayment')" v-model="commissionPaymentDialogVisible" width="520px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box" style="background:#f9f0ff;border-color:#d3adf7;">
-      <div class="row"><span>客户：</span><b>{{ currentLedger.customer_name }}</b></div>
-      <div class="row"><span>佣金：</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} {{ currentLedger.currency }}</b></div>
-      <div class="row"><span>已付佣金：</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>未付：</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div>
-      <div class="row" v-if="currentLedger.exchange_rate"><span>汇率：</span><b>1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} CNY</b></div>
+      <div class="row"><span>{{ t('pay.customer') }}</span><b>{{ currentLedger.customer_name }}</b></div>
+      <div class="row"><span>{{ t('pay.commission') }}</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} {{ currentLedger.currency }}</b></div>
+      <div class="row"><span>{{ t('pay.commissionPaid') }}</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>{{ t('pay.unpaid') }}</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div>
+      <div class="row" v-if="currentLedger.exchange_rate"><span>{{ t('pay.exchangeRate') }}</span><b>1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} CNY</b></div>
     </div>
     <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
-      客户尚未付款，建议先收款再付款给FO机构
+      {{ t('warn.customerNotPaid') }}
     </div>
     <el-form :model="commissionPayment" label-width="100px">
-      <el-form-item label="付款币种">
+      <el-form-item :label="t('form.paymentCurrency')">
         <el-select v-model="commissionPayment.payment_currency" style="width:100%" filterable @change="onCommissionCurrencyChange">
           <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
         </el-select>
       </el-form-item>
-      <el-form-item :label="commissionNeedsConversion ? '实付金额(' + commissionPayment.payment_currency + ')' : '付款金额'" required>
+      <el-form-item :label="commissionNeedsConversion ? t('form.actualAmount') + '(' + commissionPayment.payment_currency + ')' : t('form.paymentAmount')" required>
         <el-input-number v-model="commissionPayment.amount" :precision="2" :step="commissionPayment.payment_currency === 'CNY' ? 100 : 10000" :min="0.01" style="width:100%"></el-input-number>
       </el-form-item>
-      <el-form-item v-if="commissionNeedsConversion" label="折算佣金">
+      <el-form-item v-if="commissionNeedsConversion" :label="t('form.convertedCommission')">
         <div style="display:flex;flex-direction:column;gap:4px;padding:8px 12px;background:#f9f0ff;border-radius:6px;border:1px dashed #d3adf7;">
-          <span style="font-size:20px;font-weight:700;color:var(--color-purple);">≈ {{ fmt(commissionIdrEquivalent) }} {{ currentLedger.currency }}</span>
-          <span style="color:var(--text-light);font-size:12px;">按汇率 1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }} 自动换算</span>
+          <span style="font-size:20px;font-weight:700;color:var(--color-purple);">&#8776; {{ fmt(commissionIdrEquivalent) }} {{ currentLedger.currency }}</span>
+          <span style="color:var(--text-light);font-size:12px;">{{ t('commission.autoConvert') }} 1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }}</span>
         </div>
       </el-form-item>
-      <el-form-item label="付款时间">
-        <el-date-picker v-model="commissionPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" placeholder="选择时间"></el-date-picker>
+      <el-form-item :label="t('form.paymentTime')">
+        <el-date-picker v-model="commissionPayment.payment_time" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" :placeholder="t('time.pickTime')"></el-date-picker>
       </el-form-item>
-      <el-form-item label="支付截图">
+      <el-form-item :label="t('form.paymentProof')">
         <div v-if="commissionPayment.proof_url" class="upload-row">
           <div class="upload-preview-wrap">
             <img :src="commissionPayment.proof_url">
@@ -921,18 +927,18 @@
         <div v-else class="upload-row">
           <div class="upload-btn" @click="$refs.commissionFile.click()">
             <i class="fas fa-upload"></i>
-            <span>上传截图</span>
+            <span>{{ t('btn.upload') }}</span>
             <input type="file" ref="commissionFile" accept="image/*" style="display:none" @change="uploadFile($event, commissionPayment, 'proof_url')">
           </div>
           <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, commissionPayment, 'proof_url')">
-            <span class="placeholder">在此输入框内按 Ctrl+V 粘贴截图</span>
+            <span class="placeholder">{{ t('paste.hint') }}</span>
           </div>
         </div>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="commissionPaymentDialogVisible=false">取消</el-button>
-      <el-button type="primary" @click="saveCommissionPayment" :loading="saving" style="background:var(--color-purple);border-color:var(--color-purple);"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? '保存修改' : '确认佣金付款' }}</el-button>
+      <el-button @click="commissionPaymentDialogVisible=false">{{ t('btn.cancel') }}</el-button>
+      <el-button type="primary" @click="saveCommissionPayment" :loading="saving" style="background:var(--color-purple);border-color:var(--color-purple);"><i class="fas fa-check" style="margin-right:4px;"></i>{{ paymentEditMode ? t('btn.saveChanges') : t('btn.confirmCommissionPayment') }}</el-button>
     </template>
   </el-dialog>
 
@@ -949,9 +955,453 @@
 <script>
 const { createApp, ref, reactive, computed, onMounted } = Vue;
 
+const I18N = {
+  zh: {
+    'app.title': '财务对账系统',
+    'nav.dashboard': '财务看板',
+    'nav.ledgers': '对账流水',
+    'nav.rates': '汇率管理',
+    'nav.audit': '审计日志',
+    'nav.settings': '系统设置',
+    'btn.refresh': '刷新',
+    'dash.receivable': '应收总额 (多币种合计CNY)',
+    'dash.payable': '应付总额 (多币种合计CNY)',
+    'dash.origTotal': '原币合计',
+    'dash.overdue': '逾期应收',
+    'dash.overdueSub': '客户超期未付',
+    'dash.records': '流水总数',
+    'dash.recordsSub': '总记录数',
+    'dash.arStatus': '应收账款 (AR) 状态',
+    'dash.apProduct': '货值付款 (AP) 状态',
+    'dash.apCommission': '佣金付款 (AP) 状态',
+    'dash.currencyBreakdown': '按币种汇总',
+    'dash.recordsUnit': '笔',
+    'dash.receivableLabel': '应收',
+    'dash.payableLabel': '应付',
+    'dash.quickActions': '快速操作',
+    'btn.newRecord': '新增流水',
+    'btn.viewDetails': '查看明细',
+    'btn.manageRates': '管理汇率',
+    'btn.feishuSettings': '飞书设置',
+    'status.ar.pending': '待核销',
+    'status.ar.partial': '部分收款',
+    'status.ar.settled': '已清算',
+    'status.ap.pending': '待付款',
+    'status.ap.partial': '部分付款',
+    'status.ap.settled': '已结清',
+    'ledger.searchPlaceholder': '搜索客户名称...',
+    'ledger.currency': '币种',
+    'ledger.arStatus': 'AR状态',
+    'ledger.apStatus': 'AP状态',
+    'btn.filter': '筛选',
+    'btn.reset': '重置',
+    'ledger.columnSettings': '列设置',
+    'ledger.customColumns': '自定义显示列',
+    'btn.resetDefault': '恢复默认',
+    'ledger.emptyText': '暂无流水数据，点击右上角「新增流水」开始录入',
+    'col.customer_name': '客户名称',
+    'col.currency': '币种',
+    'col.payment_item': '付款项目',
+    'col.order_fee': '订单费(货值)',
+    'col.commission': '佣金',
+    'col.total_cost': '总费用',
+    'col.customer_paid': '客户已付',
+    'col.customer_unpaid': '客户未付',
+    'col.ar_status': 'AR状态',
+    'col.customer_proof': '客户付款截图',
+    'col.collection_date': '收款日期',
+    'col.product_paid': '货值已付',
+    'col.product_unpaid': '货值未付',
+    'col.product_ap_status': '货值AP',
+    'col.product_proof': '货值付款截图',
+    'col.product_payment_time': '货值付款时间',
+    'col.commission_paid': '佣金已付',
+    'col.commission_unpaid': '佣金未付',
+    'col.commission_ap_status': '佣金AP',
+    'col.commission_proof': '佣金付款截图',
+    'col.commission_payment_time': '佣金付款时间',
+    'col.total_cost_cny': '总费用(CNY)',
+    'col.remark': '备注',
+    'col.actions': '操作',
+    'group.basic': '基础',
+    'group.cost': '费用',
+    'group.customer_payment': '客户收款',
+    'group.product_payment': '货值付款',
+    'group.commission_payment': '佣金付款',
+    'btn.editRecord': '编辑流水',
+    'btn.receive': '收款',
+    'btn.editReceive': '编辑收款',
+    'btn.productPayment': '货值付款',
+    'btn.editProductPayment': '编辑货值付款',
+    'btn.commissionPayment': '佣金付款',
+    'btn.editCommissionPayment': '编辑佣金付款',
+    'rates.list': '汇率列表',
+    'rates.from': '源币种',
+    'rates.to': '目标币种',
+    'rates.rate': '汇率',
+    'rates.date': '日期',
+    'rates.source': '来源',
+    'rates.createdAt': '创建时间',
+    'rates.add': '新增汇率',
+    'btn.addRate': '添加汇率',
+    'audit.title': '操作审计日志',
+    'audit.time': '操作时间',
+    'audit.table': '表名',
+    'audit.recordId': '记录ID',
+    'audit.field': '字段',
+    'audit.oldValue': '旧值',
+    'audit.newValue': '新值',
+    'audit.operator': '操作人',
+    'settings.title': '飞书通知配置',
+    'settings.enabled': '已启用',
+    'settings.disabled': '未启用',
+    'settings.enableNotify': '启用通知',
+    'settings.notifyHint': '开启后，收款/付款等操作会自动推送到飞书群',
+    'settings.secretKey': '签名密钥',
+    'settings.secretPlaceholder': '可选，飞书机器人安全设置中的签名密钥',
+    'btn.saveConfig': '保存配置',
+    'btn.sendTest': '发送测试消息',
+    'btn.pushSummary': '推送今日汇总',
+    'settings.guideTitle': '飞书机器人配置指南：',
+    'settings.guide1': '1. 打开飞书群聊 -> 点击群设置 -> 群机器人 -> 添加机器人 -> 选择「自定义机器人」',
+    'settings.guide2': '2. 填写机器人名称和描述，安全设置可选择「签名校验」',
+    'settings.guide3': '3. 复制 Webhook URL 填入上方输入框',
+    'settings.guide4': '4. 如果开启了签名校验，将密钥也填入上方「签名密钥」',
+    'settings.guide5': '5. 点击「保存配置」然后「发送测试消息」验证是否成功',
+    'settings.eventsTitle': '通知触发事件：',
+    'settings.event1': '- 新增对账流水 -> 蓝色卡片通知',
+    'settings.event2': '- 客户收款 -> 绿色卡片通知',
+    'settings.event3': '- 货值付款 -> 橙色卡片通知',
+    'settings.event4': '- 佣金付款 -> 紫色卡片通知',
+    'settings.event5': '- 手动推送汇总 -> 蓝色卡片通知（含各币种统计）',
+    'dialog.editRecord': '编辑流水',
+    'dialog.newRecord': '新增流水',
+    'form.customerName': '客户名称',
+    'form.currency': '交易币种',
+    'form.paymentItem': '付款项目',
+    'form.orderFee': '订单费/货值',
+    'form.commission': '佣金',
+    'form.exchangeRate': '汇率',
+    'form.remark': '备注',
+    'form.remarkPlaceholder': '可选备注信息',
+    'form.totalPreview': '总费用预览',
+    'form.customerProof': '客户付款截图',
+    'form.productProof': '货值付款截图',
+    'form.commissionProof': '佣金付款截图',
+    'btn.upload': '上传截图',
+    'paste.hint': '在此输入框内按 Ctrl+V 粘贴截图',
+    'btn.cancel': '取消',
+    'btn.saveChanges': '保存修改',
+    'btn.createRecord': '创建流水',
+    'dialog.editReceive': '编辑收款',
+    'dialog.customerPayment': '客户收款',
+    'pay.customer': '客户：',
+    'pay.totalCost': '总费用：',
+    'pay.paid': '已付：',
+    'pay.unpaid': '未付：',
+    'form.receiveAmount': '收款金额',
+    'form.collectionDate': '收款日期',
+    'form.paymentProof': '支付截图',
+    'date.pickDate': '选择日期',
+    'btn.confirmReceive': '确认收款',
+    'dialog.editProductPayment': '编辑货值付款',
+    'dialog.productPayment': '货值付款',
+    'pay.productFee': '货值/订单费：',
+    'pay.productPaid': '已付货值：',
+    'warn.customerNotPaid': '客户尚未付款，建议先收款再付款给FO机构',
+    'form.paymentAmount': '付款金额',
+    'form.paymentCurrency': '付款币种',
+    'form.paymentTime': '付款时间',
+    'time.pickTime': '选择时间',
+    'btn.confirmProductPayment': '确认货值付款',
+    'dialog.editCommissionPayment': '编辑佣金付款',
+    'dialog.commissionPayment': '佣金付款',
+    'pay.commission': '佣金：',
+    'pay.commissionPaid': '已付佣金：',
+    'pay.exchangeRate': '汇率：',
+    'form.actualAmount': '实付金额',
+    'form.convertedCommission': '折算佣金',
+    'commission.autoConvert': '按汇率自动换算',
+    'btn.confirmCommissionPayment': '确认佣金付款',
+    'msg.loadLedgersFail': '加载流水数据失败',
+    'msg.columnReset': '已恢复默认列设置',
+    'msg.loadDashboardFail': '加载看板数据失败',
+    'msg.loadRatesFail': '加载汇率失败',
+    'msg.loadAuditFail': '加载审计日志失败',
+    'msg.autoFillRate': '已自动填充',
+    'msg.fillCustomerName': '请填写客户名称',
+    'msg.modifySuccess': '修改成功',
+    'msg.createSuccess': '创建成功',
+    'msg.saveFail': '保存失败',
+    'msg.enterReceiveAmount': '请输入收款金额',
+    'msg.receiveUpdated': '收款信息已更新',
+    'msg.receiveSuccess': '收款记录成功',
+    'msg.operationFail': '操作失败',
+    'msg.networkError': '网络错误',
+    'msg.enterPaymentAmount': '请输入付款金额',
+    'msg.productPaymentUpdated': '货值付款信息已更新',
+    'msg.productPaymentSuccess': '货值付款记录成功',
+    'msg.uploadSuccess': '上传成功',
+    'msg.uploadFail': '上传失败',
+    'msg.pasteSuccess': '粘贴上传成功',
+    'msg.pasteFail': '粘贴上传失败',
+    'msg.deleteConfirm1': '确认删除「',
+    'msg.deleteConfirm2': '」的流水记录？此操作为软删除，数据不会丢失。',
+    'msg.deleteTitle': '删除确认',
+    'msg.confirmDelete': '确认删除',
+    'msg.deleted': '已删除',
+    'msg.rateAddSuccess': '汇率添加成功',
+    'msg.addFail': '添加失败',
+    'msg.loadSettingsFail': '加载设置失败',
+    'msg.feishuSaved': '飞书配置已保存',
+    'msg.testSent': '测试消息发送成功，请检查飞书群',
+    'msg.sendFail': '发送失败',
+    'msg.summaryPushed': '汇总已推送到飞书',
+    'msg.pushFail': '推送失败',
+    'msg.commissionPaymentUpdated': '佣金付款信息已更新',
+    'msg.commissionPaymentSuccess': '佣金付款记录成功',
+    'empty.noRates': '暂无汇率数据',
+    'empty.noAudit': '暂无审计日志',
+  },
+  en: {
+    'app.title': 'Financial Reconciliation',
+    'nav.dashboard': 'Dashboard',
+    'nav.ledgers': 'Ledgers',
+    'nav.rates': 'Exchange Rates',
+    'nav.audit': 'Audit Log',
+    'nav.settings': 'Settings',
+    'btn.refresh': 'Refresh',
+    'dash.receivable': 'Total Receivable (Multi-currency CNY)',
+    'dash.payable': 'Total Payable (Multi-currency CNY)',
+    'dash.origTotal': 'Original total',
+    'dash.overdue': 'Overdue AR',
+    'dash.overdueSub': 'Customer overdue',
+    'dash.records': 'Total Records',
+    'dash.recordsSub': 'Total entries',
+    'dash.arStatus': 'AR Status',
+    'dash.apProduct': 'Product Payment (AP) Status',
+    'dash.apCommission': 'Commission Payment (AP) Status',
+    'dash.currencyBreakdown': 'Currency Breakdown',
+    'dash.recordsUnit': 'records',
+    'dash.receivableLabel': 'Receivable',
+    'dash.payableLabel': 'Payable',
+    'dash.quickActions': 'Quick Actions',
+    'btn.newRecord': 'New Record',
+    'btn.viewDetails': 'View Details',
+    'btn.manageRates': 'Manage Rates',
+    'btn.feishuSettings': 'Feishu Settings',
+    'status.ar.pending': 'Pending',
+    'status.ar.partial': 'Partial',
+    'status.ar.settled': 'Settled',
+    'status.ap.pending': 'Pending',
+    'status.ap.partial': 'Partial',
+    'status.ap.settled': 'Settled',
+    'ledger.searchPlaceholder': 'Search customer name...',
+    'ledger.currency': 'Currency',
+    'ledger.arStatus': 'AR Status',
+    'ledger.apStatus': 'AP Status',
+    'btn.filter': 'Filter',
+    'btn.reset': 'Reset',
+    'ledger.columnSettings': 'Columns',
+    'ledger.customColumns': 'Custom Display Columns',
+    'btn.resetDefault': 'Reset to Default',
+    'ledger.emptyText': 'No records yet. Click "New Record" to start.',
+    'col.customer_name': 'Customer',
+    'col.currency': 'Currency',
+    'col.payment_item': 'Item',
+    'col.order_fee': 'Order Fee',
+    'col.commission': 'Commission',
+    'col.total_cost': 'Total Cost',
+    'col.customer_paid': 'Cust. Paid',
+    'col.customer_unpaid': 'Cust. Unpaid',
+    'col.ar_status': 'AR Status',
+    'col.customer_proof': 'Cust. Proof',
+    'col.collection_date': 'Collect Date',
+    'col.product_paid': 'Prod. Paid',
+    'col.product_unpaid': 'Prod. Unpaid',
+    'col.product_ap_status': 'Prod. AP',
+    'col.product_proof': 'Prod. Proof',
+    'col.product_payment_time': 'Prod. Pay Time',
+    'col.commission_paid': 'Comm. Paid',
+    'col.commission_unpaid': 'Comm. Unpaid',
+    'col.commission_ap_status': 'Comm. AP',
+    'col.commission_proof': 'Comm. Proof',
+    'col.commission_payment_time': 'Comm. Pay Time',
+    'col.total_cost_cny': 'Total (CNY)',
+    'col.remark': 'Remark',
+    'col.actions': 'Actions',
+    'group.basic': 'Basic',
+    'group.cost': 'Cost',
+    'group.customer_payment': 'Customer Payment',
+    'group.product_payment': 'Product Payment',
+    'group.commission_payment': 'Commission Payment',
+    'btn.editRecord': 'Edit Record',
+    'btn.receive': 'Receive',
+    'btn.editReceive': 'Edit Receipt',
+    'btn.productPayment': 'Product Pay',
+    'btn.editProductPayment': 'Edit Product Pay',
+    'btn.commissionPayment': 'Commission Pay',
+    'btn.editCommissionPayment': 'Edit Comm. Pay',
+    'rates.list': 'Exchange Rate List',
+    'rates.from': 'From',
+    'rates.to': 'To',
+    'rates.rate': 'Rate',
+    'rates.date': 'Date',
+    'rates.source': 'Source',
+    'rates.createdAt': 'Created At',
+    'rates.add': 'Add Rate',
+    'btn.addRate': 'Add Rate',
+    'audit.title': 'Audit Log',
+    'audit.time': 'Time',
+    'audit.table': 'Table',
+    'audit.recordId': 'Record ID',
+    'audit.field': 'Field',
+    'audit.oldValue': 'Old Value',
+    'audit.newValue': 'New Value',
+    'audit.operator': 'Operator',
+    'settings.title': 'Feishu Notification Settings',
+    'settings.enabled': 'Enabled',
+    'settings.disabled': 'Disabled',
+    'settings.enableNotify': 'Enable Notification',
+    'settings.notifyHint': 'When enabled, payment operations will be pushed to Feishu group',
+    'settings.secretKey': 'Secret Key',
+    'settings.secretPlaceholder': 'Optional, Feishu bot security signature secret',
+    'btn.saveConfig': 'Save Config',
+    'btn.sendTest': 'Send Test Message',
+    'btn.pushSummary': 'Push Daily Summary',
+    'settings.guideTitle': 'Feishu Bot Configuration Guide:',
+    'settings.guide1': '1. Open Feishu group chat -> Group Settings -> Group Bots -> Add Bot -> Select "Custom Bot"',
+    'settings.guide2': '2. Fill in bot name and description, security setting can select "Signature Verification"',
+    'settings.guide3': '3. Copy the Webhook URL and paste it above',
+    'settings.guide4': '4. If signature verification is enabled, also paste the secret key above',
+    'settings.guide5': '5. Click "Save Config" then "Send Test Message" to verify',
+    'settings.eventsTitle': 'Notification Events:',
+    'settings.event1': '- New record -> Blue card notification',
+    'settings.event2': '- Customer payment -> Green card notification',
+    'settings.event3': '- Product payment -> Orange card notification',
+    'settings.event4': '- Commission payment -> Purple card notification',
+    'settings.event5': '- Manual summary push -> Blue card notification (with currency stats)',
+    'dialog.editRecord': 'Edit Record',
+    'dialog.newRecord': 'New Record',
+    'form.customerName': 'Customer Name',
+    'form.currency': 'Currency',
+    'form.paymentItem': 'Payment Item',
+    'form.orderFee': 'Order Fee/Product',
+    'form.commission': 'Commission',
+    'form.exchangeRate': 'Rate',
+    'form.remark': 'Remark',
+    'form.remarkPlaceholder': 'Optional remark',
+    'form.totalPreview': 'Total Cost Preview',
+    'form.customerProof': 'Customer Proof',
+    'form.productProof': 'Product Proof',
+    'form.commissionProof': 'Commission Proof',
+    'btn.upload': 'Upload',
+    'paste.hint': 'Press Ctrl+V here to paste screenshot',
+    'btn.cancel': 'Cancel',
+    'btn.saveChanges': 'Save Changes',
+    'btn.createRecord': 'Create Record',
+    'dialog.editReceive': 'Edit Receipt',
+    'dialog.customerPayment': 'Customer Payment',
+    'pay.customer': 'Customer: ',
+    'pay.totalCost': 'Total Cost: ',
+    'pay.paid': 'Paid: ',
+    'pay.unpaid': 'Unpaid: ',
+    'form.receiveAmount': 'Amount',
+    'form.collectionDate': 'Collection Date',
+    'form.paymentProof': 'Proof',
+    'date.pickDate': 'Select date',
+    'btn.confirmReceive': 'Confirm Payment',
+    'dialog.editProductPayment': 'Edit Product Payment',
+    'dialog.productPayment': 'Product Payment',
+    'pay.productFee': 'Product/Order Fee: ',
+    'pay.productPaid': 'Product Paid: ',
+    'warn.customerNotPaid': 'Customer has not paid yet. Consider collecting payment before paying the FO agency.',
+    'form.paymentAmount': 'Amount',
+    'form.paymentCurrency': 'Payment Currency',
+    'form.paymentTime': 'Payment Time',
+    'time.pickTime': 'Select time',
+    'btn.confirmProductPayment': 'Confirm Product Payment',
+    'dialog.editCommissionPayment': 'Edit Commission Payment',
+    'dialog.commissionPayment': 'Commission Payment',
+    'pay.commission': 'Commission: ',
+    'pay.commissionPaid': 'Commission Paid: ',
+    'pay.exchangeRate': 'Rate: ',
+    'form.actualAmount': 'Actual Amount',
+    'form.convertedCommission': 'Converted',
+    'commission.autoConvert': 'Auto-converted by rate',
+    'btn.confirmCommissionPayment': 'Confirm Commission Payment',
+    'msg.loadLedgersFail': 'Failed to load ledgers',
+    'msg.columnReset': 'Column settings reset to default',
+    'msg.loadDashboardFail': 'Failed to load dashboard',
+    'msg.loadRatesFail': 'Failed to load rates',
+    'msg.loadAuditFail': 'Failed to load audit logs',
+    'msg.autoFillRate': 'Auto-filled',
+    'msg.fillCustomerName': 'Please fill in customer name',
+    'msg.modifySuccess': 'Modified successfully',
+    'msg.createSuccess': 'Created successfully',
+    'msg.saveFail': 'Save failed',
+    'msg.enterReceiveAmount': 'Please enter payment amount',
+    'msg.receiveUpdated': 'Payment info updated',
+    'msg.receiveSuccess': 'Payment recorded successfully',
+    'msg.operationFail': 'Operation failed',
+    'msg.networkError': 'Network error',
+    'msg.enterPaymentAmount': 'Please enter payment amount',
+    'msg.productPaymentUpdated': 'Product payment info updated',
+    'msg.productPaymentSuccess': 'Product payment recorded successfully',
+    'msg.uploadSuccess': 'Upload successful',
+    'msg.uploadFail': 'Upload failed',
+    'msg.pasteSuccess': 'Paste upload successful',
+    'msg.pasteFail': 'Paste upload failed',
+    'msg.deleteConfirm1': 'Delete "',
+    'msg.deleteConfirm2': '"? This is a soft delete, data will not be lost.',
+    'msg.deleteTitle': 'Delete Confirmation',
+    'msg.confirmDelete': 'Confirm Delete',
+    'msg.deleted': 'Deleted',
+    'msg.rateAddSuccess': 'Rate added successfully',
+    'msg.addFail': 'Add failed',
+    'msg.loadSettingsFail': 'Failed to load settings',
+    'msg.feishuSaved': 'Feishu config saved',
+    'msg.testSent': 'Test message sent, please check Feishu group',
+    'msg.sendFail': 'Send failed',
+    'msg.summaryPushed': 'Summary pushed to Feishu',
+    'msg.pushFail': 'Push failed',
+    'msg.commissionPaymentUpdated': 'Commission payment info updated',
+    'msg.commissionPaymentSuccess': 'Commission payment recorded successfully',
+    'empty.noRates': 'No rate data',
+    'empty.noAudit': 'No audit logs',
+  }
+};
+
+const CURRENCY_NAMES = {
+  zh: {
+    'IDR': '印尼盾', 'THB': '泰铢', 'VND': '越南盾', 'MYR': '马来西亚令吉',
+    'PHP': '菲律宾比索', 'SGD': '新加坡元', 'BRL': '巴西雷亚尔', 'MXN': '墨西哥比索',
+    'COP': '哥伦比亚比索', 'CLP': '智利比索', 'USD': '美元', 'CNY': '人民币',
+    'EUR': '欧元', 'JPY': '日元', 'KRW': '韩元', 'GBP': '英镑', 'AUD': '澳元',
+    'TRY': '土耳其里拉', 'PLN': '波兰兹罗提', 'INR': '印度卢比',
+  },
+  en: {
+    'IDR': 'Indonesian Rupiah', 'THB': 'Thai Baht', 'VND': 'Vietnamese Dong',
+    'MYR': 'Malaysian Ringgit', 'PHP': 'Philippine Peso', 'SGD': 'Singapore Dollar',
+    'BRL': 'Brazilian Real', 'MXN': 'Mexican Peso', 'COP': 'Colombian Peso',
+    'CLP': 'Chilean Peso', 'USD': 'US Dollar', 'CNY': 'Chinese Yuan',
+    'EUR': 'Euro', 'JPY': 'Japanese Yen', 'KRW': 'Korean Won', 'GBP': 'British Pound',
+    'AUD': 'Australian Dollar', 'TRY': 'Turkish Lira', 'PLN': 'Polish Zloty',
+    'INR': 'Indian Rupee',
+  }
+};
+
+const CURRENCY_SYMBOLS = {
+  'IDR': 'Rp', 'THB': '\u0e3f', 'VND': '\u20ab', 'MYR': 'RM', 'PHP': '\u20b1',
+  'SGD': 'S$', 'BRL': 'R$', 'MXN': '$', 'COP': 'Col$', 'CLP': '$', 'USD': '$',
+  'CNY': '\u00a5', 'EUR': '\u20ac', 'JPY': '\u00a5', 'KRW': '\u20a9', 'GBP': '\u00a3',
+  'AUD': 'A$', 'TRY': '\u20ba', 'PLN': 'zl', 'INR': '\u20b9',
+};
+
 const app = createApp({
   data() {
     return {
+      lang: (() => { try { return localStorage.getItem('appLang') || 'zh'; } catch(e) { return 'zh'; } })(),
       tab: 'dashboard',
       sidebarOpen: false,
       loading: false,
@@ -987,63 +1437,48 @@ const app = createApp({
 
       feishuConfig: { feishu_webhook_url: '', feishu_webhook_secret: '', feishu_enabled: false },
 
-      currencyOptions: {
-        'IDR': {'name': '印尼盾', 'symbol': 'Rp'},
-        'THB': {'name': '泰铢', 'symbol': '\u0e3f'},
-        'VND': {'name': '越南盾', 'symbol': '\u20ab'},
-        'MYR': {'name': '马来西亚令吉', 'symbol': 'RM'},
-        'PHP': {'name': '菲律宾比索', 'symbol': '\u20b1'},
-        'SGD': {'name': '新加坡元', 'symbol': 'S$'},
-        'BRL': {'name': '巴西雷亚尔', 'symbol': 'R$'},
-        'MXN': {'name': '墨西哥比索', 'symbol': '$'},
-        'COP': {'name': '哥伦比亚比索', 'symbol': 'Col$'},
-        'CLP': {'name': '智利比索', 'symbol': '$'},
-        'USD': {'name': '美元', 'symbol': '$'},
-        'CNY': {'name': '人民币', 'symbol': '\u00a5'},
-        'EUR': {'name': '欧元', 'symbol': '\u20ac'},
-        'JPY': {'name': '日元', 'symbol': '\u00a5'},
-        'KRW': {'name': '韩元', 'symbol': '\u20a9'},
-        'GBP': {'name': '英镑', 'symbol': '\u00a3'},
-        'AUD': {'name': '澳元', 'symbol': 'A$'},
-        'TRY': {'name': '土耳其里拉', 'symbol': '\u20ba'},
-        'PLN': {'name': '波兰兹罗提', 'symbol': 'zl'},
-        'INR': {'name': '印度卢比', 'symbol': '\u20b9'},
-      },
-
       columnSettingsVisible: false,
       columnConfigVersion: 0,
       availableColumns: [
-        { key: 'index', label: '#', width: 50, fixed: 'left', visible: true, group: '基础' },
-        { key: 'customer_name', label: '客户名称', width: 170, fixed: 'left', visible: true, group: '基础' },
-        { key: 'currency', label: '币种', width: 80, visible: true, group: '基础' },
-        { key: 'payment_item', label: '付款项目', width: 100, visible: true, group: '基础' },
-        { key: 'order_fee', label: '订单费(货值)', width: 120, visible: true, group: '费用' },
-        { key: 'commission', label: '佣金', width: 90, visible: true, group: '费用' },
-        { key: 'total_cost', label: '总费用', width: 120, visible: true, group: '费用' },
-        { key: 'total_cost_cny', label: '总费用(CNY)', width: 100, visible: false, group: '费用' },
-        { key: 'customer_paid', label: '客户已付', width: 110, visible: true, group: '客户收款' },
-        { key: 'customer_unpaid', label: '客户未付', width: 110, visible: true, group: '客户收款' },
-        { key: 'ar_status', label: 'AR状态', width: 95, visible: true, group: '客户收款' },
-        { key: 'customer_proof', label: '客户付款截图', width: 90, visible: true, group: '客户收款' },
-        { key: 'collection_date', label: '收款日期', width: 105, visible: true, group: '客户收款' },
-        { key: 'product_paid', label: '货值已付', width: 110, visible: true, group: '货值付款' },
-        { key: 'product_unpaid', label: '货值未付', width: 110, visible: true, group: '货值付款' },
-        { key: 'product_ap_status', label: '货值AP', width: 90, visible: true, group: '货值付款' },
-        { key: 'product_proof', label: '货值付款截图', width: 90, visible: true, group: '货值付款' },
-        { key: 'product_payment_time', label: '货值付款时间', width: 145, visible: false, group: '货值付款' },
-        { key: 'commission_paid', label: '佣金已付', width: 130, visible: true, group: '佣金付款' },
-        { key: 'commission_unpaid', label: '佣金未付', width: 110, visible: true, group: '佣金付款' },
-        { key: 'commission_ap_status', label: '佣金AP', width: 90, visible: true, group: '佣金付款' },
-        { key: 'commission_proof', label: '佣金付款截图', width: 90, visible: true, group: '佣金付款' },
-        { key: 'commission_payment_time', label: '佣金付款时间', width: 145, visible: false, group: '佣金付款' },
-        { key: 'remark', label: '备注', width: 120, visible: true, group: '基础' },
-        { key: 'actions', label: '操作', width: 320, fixed: 'right', visible: true, group: '基础' },
+        { key: 'index', width: 50, fixed: 'left', visible: true, group: 'basic' },
+        { key: 'customer_name', width: 170, fixed: 'left', visible: true, group: 'basic' },
+        { key: 'currency', width: 80, visible: true, group: 'basic' },
+        { key: 'payment_item', width: 100, visible: true, group: 'basic' },
+        { key: 'order_fee', width: 120, visible: true, group: 'cost' },
+        { key: 'commission', width: 90, visible: true, group: 'cost' },
+        { key: 'total_cost', width: 120, visible: true, group: 'cost' },
+        { key: 'total_cost_cny', width: 100, visible: false, group: 'cost' },
+        { key: 'customer_paid', width: 110, visible: true, group: 'customer_payment' },
+        { key: 'customer_unpaid', width: 110, visible: true, group: 'customer_payment' },
+        { key: 'ar_status', width: 95, visible: true, group: 'customer_payment' },
+        { key: 'customer_proof', width: 90, visible: true, group: 'customer_payment' },
+        { key: 'collection_date', width: 105, visible: true, group: 'customer_payment' },
+        { key: 'product_paid', width: 110, visible: true, group: 'product_payment' },
+        { key: 'product_unpaid', width: 110, visible: true, group: 'product_payment' },
+        { key: 'product_ap_status', width: 90, visible: true, group: 'product_payment' },
+        { key: 'product_proof', width: 90, visible: true, group: 'product_payment' },
+        { key: 'product_payment_time', width: 145, visible: false, group: 'product_payment' },
+        { key: 'commission_paid', width: 130, visible: true, group: 'commission_payment' },
+        { key: 'commission_unpaid', width: 110, visible: true, group: 'commission_payment' },
+        { key: 'commission_ap_status', width: 90, visible: true, group: 'commission_payment' },
+        { key: 'commission_proof', width: 90, visible: true, group: 'commission_payment' },
+        { key: 'commission_payment_time', width: 145, visible: false, group: 'commission_payment' },
+        { key: 'remark', width: 120, visible: true, group: 'basic' },
+        { key: 'actions', width: 320, fixed: 'right', visible: true, group: 'basic' },
       ],
     };
   },
   computed: {
+    currencyOptions() {
+      const names = CURRENCY_NAMES[this.lang] || CURRENCY_NAMES.zh;
+      const opts = {};
+      for (const code in names) {
+        opts[code] = { name: names[code], symbol: CURRENCY_SYMBOLS[code] || code };
+      }
+      return opts;
+    },
     pageTitle() {
-      return { dashboard: '财务看板', ledgers: '对账流水', rates: '汇率管理', audit: '审计日志', settings: '系统设置' }[this.tab] || '';
+      return this.t('nav.' + this.tab) || '';
     },
     columnGroups() {
       const groups = {};
@@ -1080,6 +1515,13 @@ const app = createApp({
     }
   },
   methods: {
+    t(key) {
+      return (I18N[this.lang] && I18N[this.lang][key]) || (I18N.zh[key]) || key;
+    },
+    toggleLang() {
+      this.lang = this.lang === 'zh' ? 'en' : 'zh';
+      try { localStorage.setItem('appLang', this.lang); } catch(e) {}
+    },
     fmt(val, decimals) {
       if (decimals === undefined) decimals = 0;
       if (val === null || val === undefined || val === '') return '0';
@@ -1092,9 +1534,8 @@ const app = createApp({
       return { pending: 'info', partial: 'warning', settled: 'success' }[status] || 'info';
     },
     statusLabel(status, type) {
-      const ar = { pending: '待核销', partial: '部分收款', settled: '已清算' };
-      const ap = { pending: '待付款', partial: '部分付款', settled: '已结清' };
-      return type === 'ap' ? (ap[status] || status) : (ar[status] || status);
+      const key = 'status.' + (type === 'ap' ? 'ap' : 'ar') + '.' + status;
+      return this.t(key);
     },
 
     saveDraft(key, payload) {
@@ -1108,7 +1549,6 @@ const app = createApp({
         const saved = localStorage.getItem('reconciliationDraft_' + key);
         if (!saved) return null;
         const parsed = JSON.parse(saved);
-        // Draft older than 7 days is ignored
         if (parsed.savedAt && new Date(parsed.savedAt).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000) {
           localStorage.removeItem('reconciliationDraft_' + key);
           return null;
@@ -1143,7 +1583,7 @@ const app = createApp({
         const res = await fetch('/api/v1/ledgers?' + params.toString());
         if (!res.ok) throw new Error();
         this.ledgers = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error('加载流水数据失败'); }
+      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadLedgersFail')); }
       this.loading = false;
     },
     resetFilter() {
@@ -1174,14 +1614,14 @@ const app = createApp({
       this.availableColumns.forEach(c => c.visible = true);
       this.columnConfigVersion++;
       this.saveColumnSettings();
-      ElementPlus.ElMessage.success('已恢复默认列设置');
+      ElementPlus.ElMessage.success(this.t('msg.columnReset'));
     },
     async loadSummary() {
       try {
         const res = await fetch('/api/v1/dashboard/summary');
         if (!res.ok) throw new Error();
         this.summary = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error('加载看板数据失败'); }
+      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadDashboardFail')); }
     },
     async loadRates() {
       this.loading = true;
@@ -1189,7 +1629,7 @@ const app = createApp({
         const res = await fetch('/api/v1/rates');
         if (!res.ok) throw new Error();
         this.rates = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error('加载汇率失败'); }
+      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadRatesFail')); }
       this.loading = false;
     },
     async loadAuditLogs() {
@@ -1198,19 +1638,18 @@ const app = createApp({
         const res = await fetch('/api/v1/audit/logs?limit=200');
         if (!res.ok) throw new Error();
         this.auditLogs = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error('加载审计日志失败'); }
+      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadAuditFail')); }
       this.loading = false;
     },
 
     async onCurrencyChange(currency) {
-      // Auto-fill exchange rate from API
       try {
         const res = await fetch('/api/v1/rates/latest?from=' + currency + '&to=CNY');
         if (res.ok) {
           const data = await res.json();
           if (data.rate) {
             this.form.exchange_rate = data.rate;
-            ElementPlus.ElMessage.success('已自动填充 ' + currency + '/CNY 汇率: ' + data.rate);
+            ElementPlus.ElMessage.success(this.t('msg.autoFillRate') + ' ' + currency + '/CNY ' + data.rate);
           }
         }
       } catch(e) {}
@@ -1250,7 +1689,7 @@ const app = createApp({
     },
     async saveLedger() {
       if (!this.form.customer_name || !this.form.customer_name.trim()) {
-        ElementPlus.ElMessage.warning('请填写客户名称');
+        ElementPlus.ElMessage.warning(this.t('msg.fillCustomerName'));
         return;
       }
       this.saving = true;
@@ -1272,19 +1711,19 @@ const app = createApp({
         if (this.editing) {
           const res = await fetch('/api/v1/ledgers/' + this.form.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
           if (!res.ok) throw new Error();
-          ElementPlus.ElMessage.success('修改成功');
+          ElementPlus.ElMessage.success(this.t('msg.modifySuccess'));
           this.clearDraft('edit_' + this.form.id);
         } else {
           const res = await fetch('/api/v1/ledgers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
           if (!res.ok) throw new Error();
-          ElementPlus.ElMessage.success('创建成功');
+          ElementPlus.ElMessage.success(this.t('msg.createSuccess'));
           this.clearDraft('create');
         }
         this.dialogVisible = false;
         this.loadLedgers();
         this.loadSummary();
       } catch(e) {
-        ElementPlus.ElMessage.error('保存失败');
+        ElementPlus.ElMessage.error(this.t('msg.saveFail'));
       }
       this.saving = false;
     },
@@ -1309,7 +1748,7 @@ const app = createApp({
     },
     async saveCustomerPayment() {
       if (!this.payment.amount || this.payment.amount <= 0) {
-        ElementPlus.ElMessage.warning('请输入收款金额');
+        ElementPlus.ElMessage.warning(this.t('msg.enterReceiveAmount'));
         return;
       }
       this.saving = true;
@@ -1324,17 +1763,17 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success(this.paymentEditMode ? '收款信息已更新' : '收款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.receiveUpdated') : this.t('msg.receiveSuccess'));
           this.clearDraft('payment_' + this.currentLedger.id);
           this.paymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
         } else {
           const err = await res.json();
-          ElementPlus.ElMessage.error(err.error || '操作失败');
+          ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -1359,7 +1798,7 @@ const app = createApp({
     },
     async saveProductPayment() {
       if (!this.productPayment.amount || this.productPayment.amount <= 0) {
-        ElementPlus.ElMessage.warning('请输入付款金额');
+        ElementPlus.ElMessage.warning(this.t('msg.enterPaymentAmount'));
         return;
       }
       this.saving = true;
@@ -1375,17 +1814,17 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success(this.paymentEditMode ? '货值付款信息已更新' : '货值付款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.productPaymentUpdated') : this.t('msg.productPaymentSuccess'));
           this.clearDraft('product_' + this.currentLedger.id);
           this.productPaymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
         } else {
           const err = await res.json();
-          ElementPlus.ElMessage.error(err.error || '操作失败');
+          ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -1433,7 +1872,7 @@ const app = createApp({
     },
     async saveCommissionPayment() {
       if (!this.commissionPayment.amount || this.commissionPayment.amount <= 0) {
-        ElementPlus.ElMessage.warning('请输入付款金额');
+        ElementPlus.ElMessage.warning(this.t('msg.enterPaymentAmount'));
         return;
       }
       const saveAmount = this.commissionNeedsConversion ? this.commissionIdrEquivalent : this.commissionPayment.amount;
@@ -1450,17 +1889,17 @@ const app = createApp({
           })
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success(this.paymentEditMode ? '佣金付款信息已更新' : '佣金付款记录成功');
+          ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.commissionPaymentUpdated') : this.t('msg.commissionPaymentSuccess'));
           this.clearDraft('commission_' + this.currentLedger.id);
           this.commissionPaymentDialogVisible = false;
           this.loadLedgers();
           this.loadSummary();
         } else {
           const err = await res.json();
-          ElementPlus.ElMessage.error(err.error || '操作失败');
+          ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -1471,7 +1910,7 @@ const app = createApp({
       formData.append('file', file);
       const res = await fetch('/api/v1/attachments/upload', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '上传失败');
+      if (!res.ok) throw new Error(data.error || this.t('msg.uploadFail'));
       return data.url;
     },
     async uploadFile(event, holder, field = 'proof_url') {
@@ -1480,9 +1919,9 @@ const app = createApp({
       try {
         const url = await this.uploadToServer(file);
         holder[field] = url;
-        ElementPlus.ElMessage.success('上传成功');
+        ElementPlus.ElMessage.success(this.t('msg.uploadSuccess'));
       } catch(e) {
-        ElementPlus.ElMessage.error('上传失败');
+        ElementPlus.ElMessage.error(this.t('msg.uploadFail'));
       }
       event.target.value = '';
     },
@@ -1496,9 +1935,9 @@ const app = createApp({
           if (blob) {
             this.uploadToServer(blob).then(url => {
               holder[field] = url;
-              ElementPlus.ElMessage.success('粘贴上传成功');
+              ElementPlus.ElMessage.success(this.t('msg.pasteSuccess'));
             }).catch(() => {
-              ElementPlus.ElMessage.error('粘贴上传失败');
+              ElementPlus.ElMessage.error(this.t('msg.pasteFail'));
             });
           }
           break;
@@ -1514,13 +1953,13 @@ const app = createApp({
     async deleteLedger(row) {
       try {
         await ElementPlus.ElMessageBox.confirm(
-          '确认删除「' + row.customer_name + '」的流水记录？此操作为软删除，数据不会丢失。',
-          '删除确认',
-          { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+          this.t('msg.deleteConfirm1') + row.customer_name + this.t('msg.deleteConfirm2'),
+          this.t('msg.deleteTitle'),
+          { type: 'warning', confirmButtonText: this.t('msg.confirmDelete'), cancelButtonText: this.t('btn.cancel') }
         );
         const res = await fetch('/api/v1/ledgers/' + row.id, { method: 'DELETE' });
         if (res.ok) {
-          ElementPlus.ElMessage.success('已删除');
+          ElementPlus.ElMessage.success(this.t('msg.deleted'));
           this.loadLedgers();
           this.loadSummary();
         }
@@ -1534,15 +1973,15 @@ const app = createApp({
           body: JSON.stringify(this.newRate)
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success('汇率添加成功');
+          ElementPlus.ElMessage.success(this.t('msg.rateAddSuccess'));
           this.newRate = { from_currency: 'IDR', to_currency: 'CNY', rate: 0.000460, rate_date: new Date().toISOString().slice(0,10) };
           this.loadRates();
         } else {
           const err = await res.json();
-          ElementPlus.ElMessage.error(err.error || '添加失败');
+          ElementPlus.ElMessage.error(err.error || this.t('msg.addFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
     },
 
@@ -1557,7 +1996,7 @@ const app = createApp({
           feishu_webhook_secret: data.feishu_webhook_secret || '',
           feishu_enabled: data.feishu_enabled || false,
         };
-      } catch(e) { ElementPlus.ElMessage.error('加载设置失败'); }
+      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadSettingsFail')); }
     },
     async saveFeishuConfig() {
       this.saving = true;
@@ -1567,12 +2006,12 @@ const app = createApp({
           body: JSON.stringify(this.feishuConfig)
         });
         if (res.ok) {
-          ElementPlus.ElMessage.success('飞书配置已保存');
+          ElementPlus.ElMessage.success(this.t('msg.feishuSaved'));
         } else {
-          ElementPlus.ElMessage.error('保存失败');
+          ElementPlus.ElMessage.error(this.t('msg.saveFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -1581,12 +2020,12 @@ const app = createApp({
         const res = await fetch('/api/v1/settings/feishu/test', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
-          ElementPlus.ElMessage.success('测试消息发送成功，请检查飞书群');
+          ElementPlus.ElMessage.success(this.t('msg.testSent'));
         } else {
-          ElementPlus.ElMessage.error(data.error || '发送失败');
+          ElementPlus.ElMessage.error(data.error || this.t('msg.sendFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
     },
     async pushSummaryToFeishu() {
@@ -1594,12 +2033,12 @@ const app = createApp({
         const res = await fetch('/api/v1/settings/feishu/push-summary', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
-          ElementPlus.ElMessage.success('汇总已推送到飞书');
+          ElementPlus.ElMessage.success(this.t('msg.summaryPushed'));
         } else {
-          ElementPlus.ElMessage.error(data.error || '推送失败');
+          ElementPlus.ElMessage.error(data.error || this.t('msg.pushFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error('网络错误');
+        ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
     },
   },
