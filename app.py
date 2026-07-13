@@ -512,7 +512,7 @@ def push_summary_to_feishu(db):
         f'**Payable (CNY equiv)**: \u00a5{fmt_amount(total_payable_cny)}\n\n'
         f'**By Currency**:\n' + '\n'.join(cur_lines)
     )
-    return send_feishu_message(webhook_url, secret, 'Financial Reconciliation Summary', content, 'blue')
+    return send_feishu_message(webhook_url, secret, 'Review Reconciliation Summary', content, 'blue')
 
 
 # ============================================================
@@ -1077,7 +1077,7 @@ def test_feishu():
     ok, msg = send_feishu_message(
         webhook_url, secret,
         'Test Notification',
-        'This is a test message from the Financial Reconciliation System.\nIf you see this, the Feishu integration is working correctly!',
+        'This is a test message from the Review Reconciliation System.\nIf you see this, the Feishu integration is working correctly!',
         'green'
     )
     if ok:
@@ -1118,7 +1118,7 @@ def serve_upload(filename):
 init_db()
 migrate_db()
 print("=" * 50)
-print("  Financial Reconciliation System v3.1 (PostgreSQL)")
+print("  Review Reconciliation System v3.1 (PostgreSQL)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))

@@ -1,6 +1,6 @@
-# 财务对账系统 (Financial Reconciliation System)
+# 测评对账系统 (Review Reconciliation System)
 
-电商测评费用财务对账系统，替代 Excel 工作流。核心业务：客户 ↔ 我司 ↔ FO机构 的应收/应付账款管理。
+电商测评费用对账系统，替代 Excel 工作流。核心业务：客户 ↔ 我司 ↔ FO机构 的应收/应付账款管理。
 
 ## 技术栈
 

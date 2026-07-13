@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>财务对账系统</title>
+  <title>测评对账系统</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.6/dist/index.css">
   <link rel="stylesheet" href="https://unpkg.com/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
   <style>
@@ -108,7 +108,7 @@
 <div id="app">
   <div class="layout">
     <div class="sidebar" :class="{open: sidebarOpen}">
-      <div class="sidebar-logo"><i class="fas fa-coins"></i><span>财务对账系统</span></div>
+      <div class="sidebar-logo"><i class="fas fa-coins"></i><span>测评对账系统</span></div>
       <div class="sidebar-menu">
         <div class="sidebar-item" :class="{active: tab==='dashboard'}" @click="switchTab('dashboard')"><i class="fas fa-chart-pie"></i><span>财务看板</span></div>
         <div class="sidebar-item" :class="{active: tab==='ledgers'}" @click="switchTab('ledgers')"><i class="fas fa-table-list"></i><span>对账流水</span></div>
@@ -887,7 +887,7 @@ const app = createApp({
       const result = await this.sendFeishuMessage(
         cfg.feishu_webhook_url, cfg.feishu_webhook_secret,
         'Test Notification',
-        'This is a test message from the Financial Reconciliation System.\nIf you see this, the Feishu integration is working correctly!',
+        'This is a test message from the Review Reconciliation System.\nIf you see this, the Feishu integration is working correctly!',
         'blue'
       );
       if (result.ok) ElementPlus.ElMessage.success('测试消息发送成功，请检查飞书群');
@@ -919,7 +919,7 @@ const app = createApp({
       });
       const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
       const content = `**Date**: ${now}\n**Total Records**: ${rows.length}\n\n**Total Receivable**: ${this.fmt(totalReceivable, 2)} (various currencies)\n**Total Payable**: ${this.fmt(totalPayable, 2)} (various currencies)\n**Receivable (CNY equiv)**: \u00a5${this.fmt(totalReceivableCny, 2)}\n**Payable (CNY equiv)**: \u00a5${this.fmt(totalPayableCny, 2)}\n\n**By Currency**:\n` + curLines.join('\n');
-      const result = await this.sendFeishuMessage(cfg.feishu_webhook_url, cfg.feishu_webhook_secret, 'Financial Reconciliation Summary', content, 'blue');
+      const result = await this.sendFeishuMessage(cfg.feishu_webhook_url, cfg.feishu_webhook_secret, 'Review Reconciliation Summary', content, 'blue');
       if (result.ok) ElementPlus.ElMessage.success('汇总已推送到飞书');
       else ElementPlus.ElMessage.error('推送失败: ' + result.msg);
     },

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Financial Reconciliation System</title>
+  <title>测评对账系统</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.6/dist/index.css">
   <link rel="stylesheet" href="https://unpkg.com/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
   <style>
@@ -1025,7 +1025,7 @@ const { createApp, ref, reactive, computed, onMounted } = Vue;
 
 const I18N = {
   zh: {
-    'app.title': '财务对账系统',
+    'app.title': '测评对账系统',
     'nav.dashboard': '财务看板',
     'nav.ledgers': '对账流水',
     'nav.rates': '汇率管理',
@@ -1163,7 +1163,7 @@ const I18N = {
     'form.commissionProof': '佣金付款截图',
     'form.orderDetails': '订单明细',
     'form.importExcel': '导入 Excel',
-    'form.importExcelHint': '支持 .xlsx / .xls，自动识别「金额」列',
+    'form.importExcelHint': '支持 .xlsx / .xls；识别「金额」列，兼容 100000 / 100,000 / Rp 100.000 等格式',
     'form.viewOrderDetails': '查看订单明细',
     'form.noOrderDetails': '暂无订单明细',
     'form.autoFillAmount': '自动填入识别金额',
@@ -1248,7 +1248,7 @@ const I18N = {
     'empty.noAudit': '暂无审计日志',
   },
   en: {
-    'app.title': 'Financial Reconciliation',
+    'app.title': 'Review & Reconciliation',
     'nav.dashboard': 'Dashboard',
     'nav.ledgers': 'Ledgers',
     'nav.rates': 'Exchange Rates',
@@ -1386,7 +1386,7 @@ const I18N = {
     'form.commissionProof': 'Commission Proof',
     'form.orderDetails': 'Order Details',
     'form.importExcel': 'Import Excel',
-    'form.importExcelHint': 'Supports .xlsx / .xls, auto-detects amount columns',
+    'form.importExcelHint': 'Supports .xlsx / .xls; detects amount column; accepts 100000 / 100,000 / Rp 100.000 etc.',
     'form.viewOrderDetails': 'View Order Details',
     'form.noOrderDetails': 'No order details',
     'form.autoFillAmount': 'Auto-fill recognized amount',
@@ -2045,18 +2045,76 @@ const app = createApp({
             }
             return null;
           };
-          const orderNoKeys = ['订单号','订单编号','Order No','OrderNo','Order Number','No.','编号','OrderID','Order ID','单号'];
-          const amountKeys = ['金额','实付金额','应付金额','订单金额','amount','paid','pay amount','total','total amount','price','单价','合计','总价','支付金额'];
+          const parseAmount = (val) => {
+            if (val === null || val === undefined || val === '') return NaN;
+            let s = String(val).trim();
+            // 去除首尾货币符号和空格（支持 IDR/Rp/¥/$ 等）
+            s = s.replace(/^[\s\-]*/, '').replace(/[\s]*$/, '');
+            s = s.replace(/^(Rp|IDR|USD|\$|¥|￥|€|£|₩|₹|MYR|THB|VND|PHP|SGD|BRL|MXN|COP|CLP|AUD|CAD|CHF|CNY|JPY|KRW|GBP|TRY|PLN|INR)\s*/i, '');
+            // 括号表示负数，如 (1,200) -> -1200
+            s = s.replace(/\(([^)]+)\)/, '-$1');
+            // 移除非数字、逗号、点、负号之外的字符
+            s = s.replace(/[^0-9,.\-]/g, '');
+            if (!s) return NaN;
+            // 判断千分位/小数点约定
+            const hasDot = s.includes('.');
+            const hasComma = s.includes(',');
+            let normalized = s;
+            if (hasDot && hasComma) {
+              // 同时存在逗号和点：看哪个更靠后，更靠后的更可能是小数点
+              const lastDot = s.lastIndexOf('.');
+              const lastComma = s.lastIndexOf(',');
+              if (lastComma > lastDot) {
+                // 如 1.000,50：点是千分位，逗号是小数点
+                normalized = s.replace(/\./g, '').replace(',', '.');
+              } else {
+                // 如 1,000.50：逗号是千分位，点是小数点
+                normalized = s.replace(/,/g, '');
+              }
+            } else if (hasComma && !hasDot) {
+              // 只有逗号：若逗号后是 1-2 位，视为小数点；否则视为千分位
+              const parts = s.split(',');
+              const lastPart = parts[parts.length - 1];
+              if (lastPart.length >= 1 && lastPart.length <= 2 && parts.length > 1) {
+                normalized = s.replace(/,/g, '.');
+              } else if (lastPart.length === 3 && parts.length > 1) {
+                // 可能是千分位，也可能是小数位（3 位不常见）。
+                // 保守：如果只有一个逗号且前面>=4位，按千分位处理；否则按小数点
+                if (parts[0].length >= 4) {
+                  normalized = s.replace(/,/g, '');
+                } else {
+                  normalized = s.replace(/,/g, '.');
+                }
+              } else {
+                normalized = s.replace(/,/g, '');
+              }
+            } else if (hasDot && !hasComma) {
+              // 只有点：若点后面是 1-2 位，视为小数点；否则视为千分位
+              const parts = s.split('.');
+              const lastPart = parts[parts.length - 1];
+              if (lastPart.length >= 1 && lastPart.length <= 2 && parts.length > 1) {
+                normalized = s; // 保持小数点
+              } else if (lastPart.length === 3 && parts.length > 1) {
+                // 如 100.000 表示十万（印尼），点是千分位
+                normalized = s.replace(/\./g, '');
+              } else {
+                normalized = s.replace(/\./g, '');
+              }
+            }
+            const n = parseFloat(normalized);
+            return isNaN(n) ? NaN : n;
+          };
+          const orderNoKeys = ['订单号','订单编号','Order No','OrderNo','Order Number','No.','编号','OrderID','Order ID','单号','nomor pesanan','id pesanan','kode transaksi','transaction id','trans id','reference','ref','reference no'];
+          const amountKeys = ['金额','实付金额','应付金额','订单金额','amount','paid','pay amount','total','total amount','price','单价','合计','总价','支付金额','jumlah','nominal','harga','bayar','pembayaran','subtotal','net amount','gross amount','transaction amount'];
           const remarkKeys = ['备注','说明','remark','note','notes','description','摘要','用途'];
           const orderNoKey = findHeader(orderNoKeys);
           let amountKey = findHeader(amountKeys);
           const remarkKey = findHeader(remarkKeys);
-          // 兜底：第一个可解析为数字且数值>0的列
+          // 兜底：第一个可解析为数字且数值>0的列（跳过订单号/备注等文本列）
           if (!amountKey) {
             for (const h of headers) {
               for (const r of rows.slice(0, 10)) {
-                const raw = String(r[h]).replace(/[,\s¥$￥€£₩₹]/g, '').replace(/\((\d+(\.\d+)?)\)/, '-$1');
-                const n = parseFloat(raw);
+                const n = parseAmount(r[h]);
                 if (!isNaN(n) && n > 0) { amountKey = h; break; }
               }
               if (amountKey) break;
@@ -2066,12 +2124,6 @@ const app = createApp({
             ElementPlus.ElMessage.warning(this.t('msg.excelNoAmount'));
             return;
           }
-          const parseAmount = (val) => {
-            if (val === null || val === undefined || val === '') return NaN;
-            const s = String(val).replace(/[,\s¥$￥€£₩₹]/g, '').replace(/\((\d+(\.\d+)?)\)/, '-$1');
-            const n = parseFloat(s);
-            return isNaN(n) ? NaN : n;
-          };
           const details = [];
           let total = 0;
           let skipped = 0;
@@ -2110,11 +2162,19 @@ const app = createApp({
 
     downloadExcelTemplate(type) {
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet([
+      const dataSheet = XLSX.utils.json_to_sheet([
         { '订单号': 'ORD-001', '金额': 100000, '备注': '示例订单' },
         { '订单号': 'ORD-002', '金额': 200000, '备注': '' }
       ]);
-      XLSX.utils.book_append_sheet(wb, ws, '订单明细');
+      XLSX.utils.book_append_sheet(wb, dataSheet, '订单明细');
+      const instruction = [
+        { '说明': '请填写订单明细，系统会识别「金额」列并自动汇总。' },
+        { '说明': '表头名称支持：订单号/金额/备注（不区分大小写）。' },
+        { '说明': '金额支持格式：100000、100,000、100.000、Rp 100.000、¥100,000.00 等。' },
+        { '说明': '系统将自动识别金额列，并合计到付款金额。' }
+      ];
+      const instructionSheet = XLSX.utils.json_to_sheet(instruction);
+      XLSX.utils.book_append_sheet(wb, instructionSheet, '使用说明');
       const fileName = (type === 'product' ? '货值付款' : '佣金付款') + '导入模板.xlsx';
       XLSX.writeFile(wb, fileName);
     },
