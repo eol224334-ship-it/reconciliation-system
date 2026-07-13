@@ -438,9 +438,14 @@
               :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
               :empty-text="t('ledger.emptyText')">
               <el-table-column v-if="isColVisible('index')" key="index" type="index" width="50" label="#" fixed="left"></el-table-column>
-              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" :label="t('col.customer_name')" width="170" fixed="left" show-overflow-tooltip>
+              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" :label="t('col.customer_name')" width="160" fixed="left" show-overflow-tooltip>
                 <template #default="{row}">
                   <span style="font-weight:600;">{{ row.customer_name }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column v-if="isColVisible('company_name')" key="company_name" prop="company_name" :label="t('col.company_name')" width="140" fixed="left" show-overflow-tooltip>
+                <template #default="{row}">
+                  <span style="color:var(--text-secondary);">{{ row.company_name || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column v-if="isColVisible('currency')" key="currency" :label="t('col.currency')" width="80" align="center">
@@ -509,10 +514,16 @@
               <el-table-column v-if="isColVisible('commission_ap_status')" key="commission_ap_status" :label="t('col.commission_ap_status')" width="90" align="center">
                 <template #default="{row}"><el-tag :type="statusType(row.commission_ap_status)" size="small" effect="light">{{ statusLabel(row.commission_ap_status,'ap') }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" :label="t('col.commission_proof')" width="90" align="center">
+              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" :label="t('col.commission_proof')" width="100" align="center">
                 <template #default="{row}">
                   <img v-if="row.commission_proof_url" :src="row.commission_proof_url" class="proof-thumb" @click="previewImage(row.commission_proof_url)">
                   <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
+                </template>
+              </el-table-column>
+              <el-table-column v-if="isColVisible('attachment')" key="attachment" :label="t('col.attachment')" width="80" align="center">
+                <template #default="{row}">
+                  <a v-if="row.attachment_url" :href="row.attachment_url" target="_blank" style="color:var(--color-primary);font-size:18px;"><i class="fas fa-paperclip"></i></a>
+                  <span v-else style="color:var(--text-light);font-size:12px;">-</span>
                 </template>
               </el-table-column>
               <el-table-column v-if="isColVisible('commission_payment_time')" key="commission_payment_time" prop="commission_payment_time" :label="t('col.commission_payment_time')" width="145"></el-table-column>
@@ -703,7 +714,12 @@
     <el-form :model="form" label-width="110px">
       <el-form-item :label="t('form.customerName')" required>
         <el-input v-model="form.customer_name" placeholder="Redragon Store Jatim">
-          <template #prefix><i class="fas fa-user" style="color:#c0c4cc;"></i></template>
+          <template #prefix><i class="fas fa-store" style="color:#c0c4cc;"></i></template>
+        </el-input>
+      </el-form-item>
+      <el-form-item :label="t('form.companyName')">
+        <el-input v-model="form.company_name" placeholder="PT. Example Indonesia">
+          <template #prefix><i class="fas fa-building" style="color:#c0c4cc;"></i></template>
         </el-input>
       </el-form-item>
       <div style="display:flex;gap:12px;">
@@ -802,6 +818,24 @@
           </div>
         </el-form-item>
       </div>
+      <el-form-item :label="t('form.attachment')">
+        <div v-if="form.attachment_url" class="upload-row">
+          <div class="upload-preview-wrap">
+            <a :href="form.attachment_url" target="_blank" style="display:flex;align-items:center;gap:6px;color:var(--color-primary);"><i class="fas fa-paperclip"></i><span>附件</span></a>
+            <div class="remove-btn" @click="form.attachment_url=''"><i class="fas fa-times"></i></div>
+          </div>
+        </div>
+        <div v-else class="upload-row">
+          <div class="upload-btn" @click="$refs.editAttachment.click()">
+            <i class="fas fa-upload"></i>
+            <span>{{ t('btn.upload') }}</span>
+            <input type="file" ref="editAttachment" style="display:none" @change="uploadFile($event, form, 'attachment_url')">
+          </div>
+          <div class="upload-paste" tabindex="0" contenteditable="plaintext-only" @paste="handlePaste($event, form, 'attachment_url')">
+            <span class="placeholder">{{ t('paste.hint') }}</span>
+          </div>
+        </div>
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="dialogVisible=false">{{ t('btn.cancel') }}</el-button>
@@ -1067,10 +1101,11 @@ const I18N = {
     'ledger.customColumns': '自定义显示列',
     'btn.resetDefault': '恢复默认',
     'ledger.emptyText': '暂无流水数据，点击右上角「新增流水」开始录入',
-    'col.customer_name': '客户名称',
+    'col.customer_name': '店铺名称',
+    'col.company_name': '公司名称',
     'col.currency': '币种',
     'col.payment_item': '付款项目',
-    'col.order_fee': '订单费(货值)',
+    'col.order_fee': '货值',
     'col.commission': '佣金',
     'col.total_cost': '总费用',
     'col.customer_paid': '客户已付',
@@ -1081,7 +1116,7 @@ const I18N = {
     'col.product_paid': '货值已付',
     'col.product_unpaid': '货值未付',
     'col.product_ap_status': '货值AP',
-    'col.product_proof': '货值付款截图',
+    'col.product_proof': '货款付款截图',
     'col.product_payment_time': '货值付款时间',
     'col.commission_paid': '佣金已付',
     'col.commission_unpaid': '佣金未付',
@@ -1095,6 +1130,7 @@ const I18N = {
     'form.total': '合计',
     'col.total_cost_cny': '总费用(CNY)',
     'col.remark': '备注',
+    'col.attachment': '附件',
     'col.actions': '操作',
     'group.basic': '基础',
     'group.cost': '费用',
@@ -1149,14 +1185,16 @@ const I18N = {
     'settings.event5': '- 手动推送汇总 -> 蓝色卡片通知（含各币种统计）',
     'dialog.editRecord': '编辑流水',
     'dialog.newRecord': '新增流水',
-    'form.customerName': '客户名称',
+    'form.customerName': '店铺名称',
+    'form.companyName': '公司名称',
     'form.currency': '交易币种',
     'form.paymentItem': '付款项目',
-    'form.orderFee': '订单费/货值',
+    'form.orderFee': '货值',
     'form.commission': '佣金',
     'form.exchangeRate': '汇率',
     'form.remark': '备注',
     'form.remarkPlaceholder': '可选备注信息',
+    'form.attachment': '附件',
     'form.totalPreview': '总费用预览',
     'form.customerProof': '客户付款截图',
     'form.productProof': '货值付款截图',
@@ -1290,10 +1328,11 @@ const I18N = {
     'ledger.customColumns': 'Custom Display Columns',
     'btn.resetDefault': 'Reset to Default',
     'ledger.emptyText': 'No records yet. Click "New Record" to start.',
-    'col.customer_name': 'Customer',
+    'col.customer_name': 'Store',
+    'col.company_name': 'Company',
     'col.currency': 'Currency',
     'col.payment_item': 'Item',
-    'col.order_fee': 'Order Fee',
+    'col.order_fee': 'Product Value',
     'col.commission': 'Commission',
     'col.total_cost': 'Total Cost',
     'col.customer_paid': 'Cust. Paid',
@@ -1304,12 +1343,12 @@ const I18N = {
     'col.product_paid': 'Prod. Paid',
     'col.product_unpaid': 'Prod. Unpaid',
     'col.product_ap_status': 'Prod. AP',
-    'col.product_proof': 'Prod. Proof',
+    'col.product_proof': 'Product Payment Proof',
     'col.product_payment_time': 'Prod. Pay Time',
     'col.commission_paid': 'Comm. Paid',
     'col.commission_unpaid': 'Comm. Unpaid',
     'col.commission_ap_status': 'Comm. AP',
-    'col.commission_proof': 'Comm. Proof',
+    'col.commission_proof': 'Commission Payment Proof',
     'col.commission_payment_time': 'Comm. Pay Time',
     'col.order_details': 'Order Details',
     'col.no': 'No.',
@@ -1318,6 +1357,7 @@ const I18N = {
     'form.total': 'Total',
     'col.total_cost_cny': 'Total (CNY)',
     'col.remark': 'Remark',
+    'col.attachment': 'Attachment',
     'col.actions': 'Actions',
     'group.basic': 'Basic',
     'group.cost': 'Cost',
@@ -1372,14 +1412,16 @@ const I18N = {
     'settings.event5': '- Manual summary push -> Blue card notification (with currency stats)',
     'dialog.editRecord': 'Edit Record',
     'dialog.newRecord': 'New Record',
-    'form.customerName': 'Customer Name',
+    'form.customerName': 'Store Name',
+    'form.companyName': 'Company Name',
     'form.currency': 'Currency',
     'form.paymentItem': 'Payment Item',
-    'form.orderFee': 'Order Fee/Product',
+    'form.orderFee': 'Product Value',
     'form.commission': 'Commission',
     'form.exchangeRate': 'Rate',
     'form.remark': 'Remark',
     'form.remarkPlaceholder': 'Optional remark',
+    'form.attachment': 'Attachment',
     'form.totalPreview': 'Total Cost Preview',
     'form.customerProof': 'Customer Proof',
     'form.productProof': 'Product Proof',
@@ -1515,7 +1557,7 @@ const app = createApp({
 
       dialogVisible: false,
       editing: false,
-      form: { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '' },
+      form: { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '', attachment_url: '' },
       editProofs: { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' },
 
       paymentDialogVisible: false,
@@ -1544,30 +1586,32 @@ const app = createApp({
       columnConfigVersion: 0,
       availableColumns: [
         { key: 'index', width: 50, fixed: 'left', visible: true, group: 'basic' },
-        { key: 'customer_name', width: 170, fixed: 'left', visible: true, group: 'basic' },
-        { key: 'currency', width: 80, visible: true, group: 'basic' },
+        { key: 'company_name', width: 140, fixed: 'left', visible: true, group: 'basic' },
+        { key: 'customer_name', width: 160, fixed: 'left', visible: true, group: 'basic' },
         { key: 'payment_item', width: 100, visible: true, group: 'basic' },
-        { key: 'order_fee', width: 120, visible: true, group: 'cost' },
+        { key: 'order_fee', width: 110, visible: true, group: 'cost' },
         { key: 'commission', width: 90, visible: true, group: 'cost' },
-        { key: 'total_cost', width: 120, visible: true, group: 'cost' },
-        { key: 'total_cost_cny', width: 100, visible: false, group: 'cost' },
-        { key: 'customer_paid', width: 110, visible: true, group: 'customer_payment' },
-        { key: 'customer_unpaid', width: 110, visible: true, group: 'customer_payment' },
-        { key: 'ar_status', width: 95, visible: true, group: 'customer_payment' },
-        { key: 'customer_proof', width: 90, visible: true, group: 'customer_payment' },
-        { key: 'collection_date', width: 105, visible: true, group: 'customer_payment' },
-        { key: 'product_paid', width: 110, visible: true, group: 'product_payment' },
-        { key: 'product_unpaid', width: 110, visible: true, group: 'product_payment' },
-        { key: 'product_ap_status', width: 90, visible: true, group: 'product_payment' },
-        { key: 'product_proof', width: 90, visible: true, group: 'product_payment' },
+        { key: 'total_cost', width: 110, visible: true, group: 'cost' },
+        { key: 'currency', width: 80, visible: true, group: 'basic' },
+        { key: 'product_proof', width: 100, visible: true, group: 'proof' },
+        { key: 'commission_proof', width: 100, visible: true, group: 'proof' },
+        { key: 'attachment', width: 80, visible: true, group: 'proof' },
+        { key: 'customer_paid', width: 110, visible: false, group: 'customer_payment' },
+        { key: 'customer_unpaid', width: 110, visible: false, group: 'customer_payment' },
+        { key: 'ar_status', width: 95, visible: false, group: 'customer_payment' },
+        { key: 'customer_proof', width: 90, visible: false, group: 'customer_payment' },
+        { key: 'collection_date', width: 105, visible: false, group: 'customer_payment' },
+        { key: 'product_paid', width: 110, visible: false, group: 'product_payment' },
+        { key: 'product_unpaid', width: 110, visible: false, group: 'product_payment' },
+        { key: 'product_ap_status', width: 90, visible: false, group: 'product_payment' },
         { key: 'product_payment_time', width: 145, visible: false, group: 'product_payment' },
-        { key: 'commission_paid', width: 130, visible: true, group: 'commission_payment' },
-        { key: 'commission_unpaid', width: 110, visible: true, group: 'commission_payment' },
-        { key: 'commission_ap_status', width: 90, visible: true, group: 'commission_payment' },
-        { key: 'commission_proof', width: 90, visible: true, group: 'commission_payment' },
+        { key: 'commission_paid', width: 130, visible: false, group: 'commission_payment' },
+        { key: 'commission_unpaid', width: 110, visible: false, group: 'commission_payment' },
+        { key: 'commission_ap_status', width: 90, visible: false, group: 'commission_payment' },
         { key: 'commission_payment_time', width: 145, visible: false, group: 'commission_payment' },
-        { key: 'order_details', width: 120, visible: true, group: 'commission_payment' },
-        { key: 'remark', width: 120, visible: true, group: 'basic' },
+        { key: 'order_details', width: 120, visible: false, group: 'commission_payment' },
+        { key: 'total_cost_cny', width: 100, visible: false, group: 'cost' },
+        { key: 'remark', width: 120, visible: false, group: 'basic' },
         { key: 'actions', width: 320, fixed: 'right', visible: true, group: 'basic' },
       ],
     };
@@ -1773,7 +1817,7 @@ const app = createApp({
         this.form = draft.form;
         this.editProofs = draft.editProofs || { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
       } else {
-        this.form = { customer_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '' };
+        this.form = { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '', attachment_url: '' };
         this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
       }
       this.isRestoringDraft = false;
@@ -1805,12 +1849,14 @@ const app = createApp({
       this.saving = true;
       const data = {
         customer_name: this.form.customer_name.trim(),
+        company_name: this.form.company_name || '',
         payment_item: this.form.payment_item || 'FO-PLAN',
         order_fee: this.form.order_fee || 0,
         commission: this.form.commission || 0,
         currency: this.form.currency || 'IDR',
         exchange_rate: this.form.exchange_rate || 0.000460,
         remark: this.form.remark || '',
+        attachment_url: this.form.attachment_url || '',
         customer_proof_url: this.editProofs.customer_proof_url || '',
         product_proof_url: this.editProofs.product_proof_url || '',
         commission_proof_url: this.editProofs.commission_proof_url || '',

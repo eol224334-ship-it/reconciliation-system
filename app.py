@@ -129,6 +129,8 @@ def init_db():
             commission_payment_currency TEXT,
             commission_payment_rate DOUBLE PRECISION DEFAULT 0.000460,
             order_details TEXT,
+            company_name TEXT,
+            attachment_url TEXT,
             fo_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
             fo_unpaid DOUBLE PRECISION GENERATED ALWAYS AS (order_fee + commission - fo_paid) STORED,
             fo_payment_time TEXT,
@@ -238,6 +240,8 @@ def migrate_db():
         ('commission_payment_currency', 'TEXT'),
         ('commission_payment_rate', 'DOUBLE PRECISION DEFAULT 0.000460'),
         ('order_details', 'TEXT'),
+        ('company_name', 'TEXT'),
+        ('attachment_url', 'TEXT'),
     ]
 
     for col_name, col_def in new_cols:
@@ -557,17 +561,18 @@ def create_ledger():
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cur = db.execute(
         """INSERT INTO evaluation_expense_ledger
-           (customer_name, payment_item, order_fee, commission, customer_paid,
+           (customer_name, company_name, payment_item, order_fee, commission, customer_paid,
             collection_date, customer_proof_url,
             product_paid, product_payment_time, product_proof_url, product_payment_currency,
             commission_paid, commission_payment_time, commission_proof_url, commission_payment_currency,
-            commission_payment_rate, order_details,
+            commission_payment_rate, order_details, attachment_url,
             fo_paid, fo_payment_time, fo_proof_url,
             currency, exchange_rate, remark, created_by, updated_at, created_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING id""",
         (
             data.get('customer_name', ''),
+            data.get('company_name'),
             data.get('payment_item', 'FO-PLAN'),
             float(data.get('order_fee', 0)),
             float(data.get('commission', 0)),
@@ -584,6 +589,7 @@ def create_ledger():
             data.get('commission_payment_currency'),
             float(data.get('commission_payment_rate', data.get('exchange_rate', 0.000460))),
             serialize_order_details(data.get('order_details')),
+            data.get('attachment_url'),
             float(data.get('fo_paid', 0)),
             data.get('fo_payment_time'),
             data.get('fo_proof_url'),
@@ -626,11 +632,11 @@ def update_ledger(ledger_id):
         return jsonify({'error': 'Not found'}), 404
     old = dict(old)
     fields = [
-        'customer_name', 'payment_item', 'order_fee', 'commission',
+        'customer_name', 'company_name', 'payment_item', 'order_fee', 'commission',
         'customer_paid', 'collection_date', 'customer_proof_url',
         'product_paid', 'product_payment_time', 'product_proof_url', 'product_payment_currency',
         'commission_paid', 'commission_payment_time', 'commission_proof_url', 'commission_payment_currency', 'commission_payment_rate',
-        'order_details',
+        'order_details', 'attachment_url',
         'fo_paid', 'fo_payment_time', 'fo_proof_url',
         'currency', 'exchange_rate', 'remark'
     ]
@@ -873,12 +879,18 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
-        return jsonify({'error': 'Only image files are allowed'}), 400
+    allowed_exts = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.zip', '.rar')
+    if ext not in allowed_exts:
+        return jsonify({'error': 'Unsupported file type'}), 400
     # Store as base64 data URI in database (persistent across restarts)
     file_data = file.read()
-    mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif'}
-    mime = mime_map.get(ext, 'image/png')
+    mime_map = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
+        '.pdf': 'application/pdf', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.txt': 'text/plain', '.csv': 'text/csv', '.zip': 'application/zip', '.rar': 'application/x-rar-compressed'
+    }
+    mime = mime_map.get(ext, 'application/octet-stream')
     b64 = base64.b64encode(file_data).decode('utf-8')
     data_uri = f'data:{mime};base64,{b64}'
     return jsonify({
