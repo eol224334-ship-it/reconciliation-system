@@ -127,6 +127,7 @@ def init_db():
             commission_proof_url TEXT,
             commission_ap_status TEXT NOT NULL DEFAULT 'pending',
             commission_payment_currency TEXT,
+            order_details TEXT,
             fo_paid DOUBLE PRECISION NOT NULL DEFAULT 0,
             fo_unpaid DOUBLE PRECISION GENERATED ALWAYS AS (order_fee + commission - fo_paid) STORED,
             fo_payment_time TEXT,
@@ -234,6 +235,7 @@ def migrate_db():
         ('commission_proof_url', 'TEXT'),
         ('commission_ap_status', "TEXT NOT NULL DEFAULT 'pending'"),
         ('commission_payment_currency', 'TEXT'),
+        ('order_details', 'TEXT'),
     ]
 
     for col_name, col_def in new_cols:
@@ -259,11 +261,34 @@ def fmt_amount(val):
     return f'{float(val):,.2f}'
 
 
+def serialize_order_details(val):
+    """order_details is stored in a TEXT column; keep it as valid JSON."""
+    if val is None:
+        return None
+    if isinstance(val, (list, dict)):
+        return json.dumps(val, ensure_ascii=False)
+    return val
+
+
+def parse_order_details(val):
+    """Parse order_details TEXT back into a Python list (or [])."""
+    if val is None:
+        return []
+    if isinstance(val, (list, dict)):
+        return val
+    try:
+        parsed = json.loads(val)
+        return parsed if isinstance(parsed, list) else [parsed]
+    except Exception:
+        return []
+
+
 def enrich_ledger(row):
     """Add computed fields for split FO payment and currency info."""
     d = row_to_dict(row)
     if not d:
         return None
+    d['order_details'] = parse_order_details(d.get('order_details'))
     d['product_unpaid'] = round(d['order_fee'] - d['product_paid'], 2)
     d['commission_unpaid'] = round(d['commission'] - d['commission_paid'], 2)
     d['fo_paid_total'] = round(d['product_paid'] + d['commission_paid'], 2)
@@ -532,10 +557,11 @@ def create_ledger():
            (customer_name, payment_item, order_fee, commission, customer_paid,
             collection_date, customer_proof_url,
             product_paid, product_payment_time, product_proof_url, product_payment_currency,
-            commission_paid, commission_payment_time, commission_proof_url, commission_payment_currency,
+            commission_paid, commission_payment_time, commission_proof_url,             commission_payment_currency,
+            order_details,
             fo_paid, fo_payment_time, fo_proof_url,
             currency, exchange_rate, remark, created_by, updated_at, created_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING id""",
         (
             data.get('customer_name', ''),
@@ -553,6 +579,7 @@ def create_ledger():
             data.get('commission_payment_time'),
             data.get('commission_proof_url'),
             data.get('commission_payment_currency'),
+            serialize_order_details(data.get('order_details')),
             float(data.get('fo_paid', 0)),
             data.get('fo_payment_time'),
             data.get('fo_proof_url'),
@@ -599,6 +626,7 @@ def update_ledger(ledger_id):
         'customer_paid', 'collection_date', 'customer_proof_url',
         'product_paid', 'product_payment_time', 'product_proof_url', 'product_payment_currency',
         'commission_paid', 'commission_payment_time', 'commission_proof_url', 'commission_payment_currency',
+        'order_details',
         'fo_paid', 'fo_payment_time', 'fo_proof_url',
         'currency', 'exchange_rate', 'remark'
     ]
@@ -607,7 +635,7 @@ def update_ledger(ledger_id):
     for f in fields:
         if f in data:
             old_val = old.get(f)
-            new_val = data[f]
+            new_val = serialize_order_details(data[f]) if f == 'order_details' else data[f]
             log_audit(db, 'evaluation_expense_ledger', ledger_id, f, old_val, new_val)
             updates.append(f'{f} = %s')
             params.append(new_val)
@@ -711,9 +739,15 @@ def product_payment(ledger_id):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_proof_url', old.get('product_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_currency', old.get('product_payment_currency'), data['payment_currency'])
+    extra_set = ''
+    extra_params = []
+    if data.get('order_details') is not None:
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'order_details', old.get('order_details'), data['order_details'])
+        extra_set = ', order_details = %s'
+        extra_params = [serialize_order_details(data['order_details'])]
     db.execute(
-        'UPDATE evaluation_expense_ledger SET product_paid = %s, product_payment_time = %s, product_proof_url = %s, product_payment_currency = %s, updated_at = %s WHERE id = %s',
-        (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'),
+        'UPDATE evaluation_expense_ledger SET product_paid = %s, product_payment_time = %s, product_proof_url = %s, product_payment_currency = %s' + extra_set + ', updated_at = %s WHERE id = %s',
+        (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'), *extra_params,
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
@@ -758,9 +792,15 @@ def commission_payment(ledger_id):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_proof_url', old.get('commission_proof_url'), data['proof_url'])
     if data.get('payment_currency'):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'commission_payment_currency', old.get('commission_payment_currency'), data['payment_currency'])
+    extra_set = ''
+    extra_params = []
+    if data.get('order_details') is not None:
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'order_details', old.get('order_details'), data['order_details'])
+        extra_set = ', order_details = %s'
+        extra_params = [serialize_order_details(data['order_details'])]
     db.execute(
-        'UPDATE evaluation_expense_ledger SET commission_paid = %s, commission_payment_time = %s, commission_proof_url = %s, commission_payment_currency = %s, updated_at = %s WHERE id = %s',
-        (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'),
+        'UPDATE evaluation_expense_ledger SET commission_paid = %s, commission_payment_time = %s, commission_proof_url = %s, commission_payment_currency = %s' + extra_set + ', updated_at = %s WHERE id = %s',
+        (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'), *extra_params,
          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ledger_id)
     )
     recalc_status(db, ledger_id)
