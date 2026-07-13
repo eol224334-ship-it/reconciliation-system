@@ -195,6 +195,11 @@
     .feishu-guide { background: #f9f0ff; border: 1px solid #d3adf7; border-radius: var(--radius); padding: 14px 18px; margin-top: 16px; font-size: 13px; color: #531dab; line-height: 1.8; }
     .feishu-guide b { font-weight: 700; }
     .feishu-guide code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .settings-divider { height: 1px; background: #e4e7ed; margin: 20px 0; }
+    .payment-items-section { }
+    .payment-items-tags { display: flex; flex-wrap: wrap; gap: 10px; }
+    .payment-items-tags .el-tag { cursor: default; }
+    .payment-items-tags .el-tag .el-tag__close { cursor: pointer; }
 
     /* ===== Responsive ===== */
     .menu-toggle { display: none; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-primary); }
@@ -705,6 +710,21 @@
                 </el-form-item>
               </el-form>
 
+              <div class="settings-divider"></div>
+              <div class="payment-items-section">
+                <h4 style="margin:0 0 8px 0;"><i class="fas fa-tags" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('settings.paymentItems') }}</h4>
+                <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px 0;line-height:1.5;">{{ t('settings.paymentItemsHint') }}</p>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                  <el-input v-model="newPaymentItem" :placeholder="t('settings.addPaymentItem')" @keyup.enter="addPaymentItem" style="flex:1;" clearable></el-input>
+                  <el-button type="primary" @click="addPaymentItem"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.add') }}</el-button>
+                </div>
+                <div class="payment-items-tags">
+                  <el-tag v-for="item in paymentItemOptions" :key="item" :closable="!['FO-PLAN','FO-PRO','FO-BASIC','CUSTOM'].includes(item)" @close="removePaymentItem(item)" size="large" effect="plain" style="font-size:13px;">
+                    {{ item }}
+                  </el-tag>
+                </div>
+              </div>
+
               <div class="feishu-guide">
                 <b>{{ t('settings.guideTitle') }}</b><br>
                 {{ t('settings.guide1') }}<br>
@@ -749,11 +769,8 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('form.paymentItem')" style="flex:1;">
-          <el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option>
-            <el-option label="FO-PLAN" value="FO-PLAN"></el-option>
-            <el-option label="FO-PRO" value="FO-PRO"></el-option>
-            <el-option label="FO-BASIC" value="FO-BASIC"></el-option>
-            <el-option label="CUSTOM" value="CUSTOM"></el-option>
+          <el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option :placeholder="t('form.paymentItemPlaceholder')">
+            <el-option v-for="item in paymentItemOptions" :key="item" :label="item" :value="item"></el-option>
           </el-select>
         </el-form-item>
       </div>
@@ -1191,6 +1208,10 @@ const I18N = {
     'settings.notifyHint': '开启后，收款/付款等操作会自动推送到飞书群',
     'settings.secretKey': '签名密钥',
     'settings.secretPlaceholder': '可选，飞书机器人安全设置中的签名密钥',
+    'settings.paymentItems': '付款项目管理',
+    'settings.paymentItemsHint': '添加常用的自定义付款项目，预设项目（FO-PLAN/FO-PRO/FO-BASIC/CUSTOM）不可删除。系统也会自动收集历史流水中的付款项目。',
+    'settings.addPaymentItem': '输入新付款项目',
+    'btn.add': '添加',
     'btn.saveConfig': '保存配置',
     'btn.sendTest': '发送测试消息',
     'btn.pushSummary': '推送今日汇总',
@@ -1212,6 +1233,7 @@ const I18N = {
     'form.companyName': '公司名称',
     'form.currency': '交易币种',
     'form.paymentItem': '付款项目',
+    'form.paymentItemPlaceholder': '请选择或输入新项目',
     'form.orderFee': '货值',
     'form.commission': '佣金',
     'form.exchangeRate': '汇率',
@@ -1267,6 +1289,10 @@ const I18N = {
     'btn.confirmCommissionPayment': '确认佣金付款',
     'msg.loadLedgersFail': '加载流水数据失败',
     'msg.columnReset': '已恢复默认列设置',
+    'msg.paymentItemExists': '该项目已存在',
+    'msg.paymentItemAdded': '付款项目已添加',
+    'msg.paymentItemDeleted': '付款项目已删除',
+    'msg.cannotDeletePreset': '预设项目不可删除',
     'msg.loadDashboardFail': '加载看板数据失败',
     'msg.loadRatesFail': '加载汇率失败',
     'msg.loadAuditFail': '加载审计日志失败',
@@ -1423,6 +1449,10 @@ const I18N = {
     'settings.notifyHint': 'When enabled, payment operations will be pushed to Feishu group',
     'settings.secretKey': 'Secret Key',
     'settings.secretPlaceholder': 'Optional, Feishu bot security signature secret',
+    'settings.paymentItems': 'Payment Item Management',
+    'settings.paymentItemsHint': 'Add custom payment items. Preset items (FO-PLAN/FO-PRO/FO-BASIC/CUSTOM) cannot be deleted. The system also collects items from historical records.',
+    'settings.addPaymentItem': 'Enter new payment item',
+    'btn.add': 'Add',
     'btn.saveConfig': 'Save Config',
     'btn.sendTest': 'Send Test Message',
     'btn.pushSummary': 'Push Daily Summary',
@@ -1444,6 +1474,7 @@ const I18N = {
     'form.companyName': 'Company Name',
     'form.currency': 'Currency',
     'form.paymentItem': 'Payment Item',
+    'form.paymentItemPlaceholder': 'Select or enter new item',
     'form.orderFee': 'Product Value',
     'form.commission': 'Commission',
     'form.exchangeRate': 'Rate',
@@ -1499,6 +1530,10 @@ const I18N = {
     'btn.confirmCommissionPayment': 'Confirm Commission Payment',
     'msg.loadLedgersFail': 'Failed to load ledgers',
     'msg.columnReset': 'Column settings reset to default',
+    'msg.paymentItemExists': 'Item already exists',
+    'msg.paymentItemAdded': 'Payment item added',
+    'msg.paymentItemDeleted': 'Payment item deleted',
+    'msg.cannotDeletePreset': 'Cannot delete preset item',
     'msg.loadDashboardFail': 'Failed to load dashboard',
     'msg.loadRatesFail': 'Failed to load rates',
     'msg.loadAuditFail': 'Failed to load audit logs',
@@ -1611,6 +1646,9 @@ const app = createApp({
       newRate: { from_currency: 'IDR', to_currency: 'CNY', rate: 0.000460, rate_date: new Date().toISOString().slice(0,10) },
 
       feishuConfig: { feishu_webhook_url: '', feishu_webhook_secret: '', feishu_enabled: false },
+
+      paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
+      newPaymentItem: '',
 
       columnSettingsVisible: false,
       columnConfigVersion: 0,
@@ -1765,6 +1803,7 @@ const app = createApp({
         ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.loadLedgersFail'));
       } finally {
         this.loading = false;
+        this.collectPaymentItemsFromLedgers();
       }
     },
     resetFilter() {
@@ -1832,6 +1871,62 @@ const app = createApp({
     onColVisibleChange() {
       this.saveColumnSettings();
       this.columnConfigVersion++;
+    },
+    loadPaymentItemOptions() {
+      try {
+        const saved = localStorage.getItem('reconciliationPaymentItems');
+        if (saved) {
+          const items = JSON.parse(saved);
+          if (Array.isArray(items) && items.length) {
+            this.paymentItemOptions = [...new Set([...this.paymentItemOptions, ...items])];
+          }
+        }
+      } catch(e) {}
+    },
+    savePaymentItemOptions() {
+      try {
+        localStorage.setItem('reconciliationPaymentItems', JSON.stringify(this.paymentItemOptions));
+      } catch(e) {}
+    },
+    addPaymentItem() {
+      const val = (this.newPaymentItem || '').trim().toUpperCase();
+      if (!val) return;
+      if (this.paymentItemOptions.includes(val)) {
+        ElementPlus.ElMessage.warning(this.t('msg.paymentItemExists'));
+        return;
+      }
+      this.paymentItemOptions.push(val);
+      this.paymentItemOptions.sort();
+      this.newPaymentItem = '';
+      this.savePaymentItemOptions();
+      ElementPlus.ElMessage.success(this.t('msg.paymentItemAdded'));
+    },
+    removePaymentItem(item) {
+      const presets = ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'];
+      if (presets.includes(item)) {
+        ElementPlus.ElMessage.warning(this.t('msg.cannotDeletePreset'));
+        return;
+      }
+      this.paymentItemOptions = this.paymentItemOptions.filter(i => i !== item);
+      this.savePaymentItemOptions();
+      ElementPlus.ElMessage.success(this.t('msg.paymentItemDeleted'));
+    },
+    collectPaymentItemsFromLedgers() {
+      if (!this.ledgers || !this.ledgers.length) return;
+      const existing = new Set(this.paymentItemOptions);
+      let changed = false;
+      this.ledgers.forEach(row => {
+        const item = row && row.payment_item;
+        if (item && !existing.has(item)) {
+          this.paymentItemOptions.push(item);
+          existing.add(item);
+          changed = true;
+        }
+      });
+      if (changed) {
+        this.paymentItemOptions.sort();
+        this.savePaymentItemOptions();
+      }
     },
     async loadSummary() {
       try {
@@ -2495,6 +2590,7 @@ const app = createApp({
   mounted() {
     this.defaultColumnOrder = this.availableColumns.map(c => c.key);
     this.loadColumnSettings();
+    this.loadPaymentItemOptions();
     this.loadSummary();
   }
 });
