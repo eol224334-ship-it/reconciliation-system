@@ -862,7 +862,10 @@
     <div class="dialog-info-box" style="background:#fffbe6;border-color:#ffe58f;margin-top:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <b style="font-size:13px;"><i class="fas fa-file-excel" style="color:var(--color-success);margin-right:6px;"></i>{{ t('form.importExcel') }}</b>
-        <el-button size="small" type="success" text @click="$refs.productExcelFile.click()"><i class="fas fa-upload"></i> {{ t('btn.upload') }}</el-button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <el-button size="small" type="success" text @click="downloadExcelTemplate('product')"><i class="fas fa-download"></i> {{ t('btn.downloadTemplate') }}</el-button>
+          <el-button size="small" type="success" text @click="$refs.productExcelFile.click()"><i class="fas fa-upload"></i> {{ t('btn.upload') }}</el-button>
+        </div>
         <input type="file" ref="productExcelFile" accept=".xlsx,.xls" style="display:none" @change="handleExcelImport($event, 'product')">
       </div>
       <div v-if="productPayment.order_details && productPayment.order_details.length" style="font-size:12px;color:var(--text-secondary);">
@@ -913,7 +916,7 @@
       <div class="row"><span>{{ t('pay.customer') }}</span><b>{{ currentLedger.customer_name }}</b></div>
       <div class="row"><span>{{ t('pay.commission') }}</span><b style="color:var(--color-purple);">{{ fmt(currentLedger.commission) }} {{ currentLedger.currency }}</b></div>
       <div class="row"><span>{{ t('pay.commissionPaid') }}</span><b style="color:var(--color-success);">{{ fmt(currentLedger.commission_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>{{ t('pay.unpaid') }}</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.commission_unpaid) }}</b></div>
-      <div class="row" v-if="currentLedger.exchange_rate"><span>{{ t('pay.exchangeRate') }}</span><b>1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} CNY</b></div>
+      <div class="row" v-if="currentLedger.exchange_rate"><span>{{ t('pay.exchangeRate') }}</span><b>1 {{ currentLedger.currency }} = {{ commissionPayment.commission_payment_rate || currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }}</b></div>
     </div>
     <div v-if="currentLedger && currentLedger.ar_status==='pending' && !paymentEditMode" class="dialog-warn-box">
       <i class="fas fa-triangle-exclamation"></i>
@@ -922,7 +925,10 @@
     <div class="dialog-info-box" style="background:#fffbe6;border-color:#ffe58f;margin-top:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <b style="font-size:13px;"><i class="fas fa-file-excel" style="color:var(--color-success);margin-right:6px;"></i>{{ t('form.importExcel') }}</b>
-        <el-button size="small" type="success" text @click="$refs.commissionExcelFile.click()"><i class="fas fa-upload"></i> {{ t('btn.upload') }}</el-button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <el-button size="small" type="success" text @click="downloadExcelTemplate('commission')"><i class="fas fa-download"></i> {{ t('btn.downloadTemplate') }}</el-button>
+          <el-button size="small" type="success" text @click="$refs.commissionExcelFile.click()"><i class="fas fa-upload"></i> {{ t('btn.upload') }}</el-button>
+        </div>
         <input type="file" ref="commissionExcelFile" accept=".xlsx,.xls" style="display:none" @change="handleExcelImport($event, 'commission')">
       </div>
       <div v-if="commissionPayment.order_details && commissionPayment.order_details.length" style="font-size:12px;color:var(--text-secondary);">
@@ -936,13 +942,20 @@
           <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
         </el-select>
       </el-form-item>
+      <el-form-item v-if="commissionNeedsConversion" :label="t('form.exchangeRate')">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span>1 {{ currentLedger.currency }} =</span>
+          <el-input-number v-model="commissionPayment.commission_payment_rate" :precision="6" :step="0.00001" :min="0.000001" style="flex:1;"></el-input-number>
+          <span>{{ commissionPayment.payment_currency }}</span>
+        </div>
+      </el-form-item>
       <el-form-item :label="commissionNeedsConversion ? t('form.actualAmount') + '(' + commissionPayment.payment_currency + ')' : t('form.paymentAmount')" required>
         <el-input-number v-model="commissionPayment.amount" :precision="2" :step="commissionPayment.payment_currency === 'CNY' ? 100 : 10000" :min="0.01" style="width:100%"></el-input-number>
       </el-form-item>
       <el-form-item v-if="commissionNeedsConversion" :label="t('form.convertedCommission')">
         <div style="display:flex;flex-direction:column;gap:4px;padding:8px 12px;background:#f9f0ff;border-radius:6px;border:1px dashed #d3adf7;">
           <span style="font-size:20px;font-weight:700;color:var(--color-purple);">&#8776; {{ fmt(commissionIdrEquivalent) }} {{ currentLedger.currency }}</span>
-          <span style="color:var(--text-light);font-size:12px;">{{ t('commission.autoConvert') }} 1 {{ currentLedger.currency }} = {{ currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }}</span>
+          <span style="color:var(--text-light);font-size:12px;">{{ t('commission.autoConvert') }} 1 {{ currentLedger.currency }} = {{ commissionPayment.commission_payment_rate || currentLedger.exchange_rate }} {{ commissionPayment.payment_currency }}</span>
         </div>
       </el-form-item>
       <el-form-item :label="t('form.paymentTime')">
@@ -1156,6 +1169,7 @@ const I18N = {
     'form.autoFillAmount': '自动填入识别金额',
     'form.recognizedAmount': '识别到 {count} 笔订单，合计 {amount}',
     'btn.upload': '上传截图',
+    'btn.downloadTemplate': '下载模板',
     'paste.hint': '在此输入框内按 Ctrl+V 粘贴截图',
     'btn.cancel': '取消',
     'btn.saveChanges': '保存修改',
@@ -1228,7 +1242,7 @@ const I18N = {
     'msg.commissionPaymentUpdated': '佣金付款信息已更新',
     'msg.commissionPaymentSuccess': '佣金付款记录成功',
     'msg.excelNoAmount': '未识别到金额列，请检查 Excel 表头',
-    'msg.excelParsed': 'Excel 解析成功',
+    'msg.excelParsed': '识别到 {count} 笔，合计 {amount}，跳过 {skipped} 行',
     'msg.excelParseFail': 'Excel 解析失败',
     'empty.noRates': '暂无汇率数据',
     'empty.noAudit': '暂无审计日志',
@@ -1378,6 +1392,7 @@ const I18N = {
     'form.autoFillAmount': 'Auto-fill recognized amount',
     'form.recognizedAmount': 'Detected {count} orders, total {amount}',
     'btn.upload': 'Upload',
+    'btn.downloadTemplate': 'Download Template',
     'paste.hint': 'Press Ctrl+V here to paste screenshot',
     'btn.cancel': 'Cancel',
     'btn.saveChanges': 'Save Changes',
@@ -1450,7 +1465,7 @@ const I18N = {
     'msg.commissionPaymentUpdated': 'Commission payment info updated',
     'msg.commissionPaymentSuccess': 'Commission payment recorded successfully',
     'msg.excelNoAmount': 'No amount column detected, please check the Excel header',
-    'msg.excelParsed': 'Excel parsed successfully',
+    'msg.excelParsed': 'Detected {count} rows, total {amount}, skipped {skipped}',
     'msg.excelParseFail': 'Failed to parse Excel',
     'empty.noRates': 'No rate data',
     'empty.noAudit': 'No audit logs',
@@ -1512,7 +1527,7 @@ const app = createApp({
       productPayment: { amount: 0, payment_time: '', proof_url: '', payment_currency: '', order_details: [] },
 
       commissionPaymentDialogVisible: false,
-      commissionPayment: { amount: 0, payment_time: '', proof_url: '', payment_currency: '', order_details: [] },
+      commissionPayment: { amount: 0, payment_time: '', proof_url: '', payment_currency: '', order_details: [], commission_payment_rate: 0 },
       _prevCommissionCur: '',
 
       imagePreviewVisible: false,
@@ -1594,7 +1609,7 @@ const app = createApp({
     },
     commissionIdrEquivalent() {
       if (!this.commissionNeedsConversion) return this.commissionPayment.amount;
-      const rate = this.currentLedger.exchange_rate || 0.000460;
+      const rate = (this.commissionPayment.commission_payment_rate || this.currentLedger.exchange_rate || 0.000460);
       if (this.commissionPayment.payment_currency === 'CNY') {
         return this.commissionPayment.amount / rate;
       } else if (this.currentLedger.currency === 'CNY') {
@@ -1930,12 +1945,13 @@ const app = createApp({
       this.paymentEditMode = !!isEdit;
       if (isEdit) {
         const payCur = row.commission_payment_currency || row.currency || 'IDR';
+        const rate = row.commission_payment_rate || row.exchange_rate || 0.000460;
         let amt = row.commission_paid;
-        if (payCur !== row.currency && row.exchange_rate) {
-          if (payCur === 'CNY') amt = row.commission_paid * row.exchange_rate;
-          else if (row.currency === 'CNY') amt = row.commission_paid / row.exchange_rate;
+        if (payCur !== row.currency && rate) {
+          if (payCur === 'CNY') amt = row.commission_paid * rate;
+          else if (row.currency === 'CNY') amt = row.commission_paid / rate;
         }
-        this.commissionPayment = { amount: parseFloat(amt.toFixed(2)), payment_time: row.commission_payment_time || '', proof_url: row.commission_proof_url || '', payment_currency: payCur, order_details: Array.isArray(row.order_details) ? JSON.parse(JSON.stringify(row.order_details)) : [] };
+        this.commissionPayment = { amount: parseFloat(amt.toFixed(2)), payment_time: row.commission_payment_time || '', proof_url: row.commission_proof_url || '', payment_currency: payCur, order_details: Array.isArray(row.order_details) ? JSON.parse(JSON.stringify(row.order_details)) : [], commission_payment_rate: row.commission_payment_rate || row.exchange_rate || 0.000460 };
         this._prevCommissionCur = payCur;
         this.commissionPaymentDialogVisible = true;
         return;
@@ -1945,7 +1961,7 @@ const app = createApp({
       if (draft && draft.commissionPayment) {
         this.commissionPayment = draft.commissionPayment;
       } else {
-        this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR', order_details: Array.isArray(row.order_details) ? JSON.parse(JSON.stringify(row.order_details)) : [] };
+        this.commissionPayment = { amount: row.commission_unpaid, payment_time: new Date().toISOString().slice(0,19).replace('T',' '), proof_url: row.commission_proof_url || '', payment_currency: row.commission_payment_currency || row.currency || 'IDR', order_details: Array.isArray(row.order_details) ? JSON.parse(JSON.stringify(row.order_details)) : [], commission_payment_rate: row.commission_payment_rate || row.exchange_rate || 0.000460 };
       }
       this._prevCommissionCur = this.commissionPayment.payment_currency;
       this.isRestoringDraft = false;
@@ -1954,7 +1970,7 @@ const app = createApp({
     onCommissionCurrencyChange(newCur) {
       if (!this.currentLedger) return;
       const prevCur = this._prevCommissionCur || this.currentLedger.currency;
-      const rate = this.currentLedger.exchange_rate || 0.000460;
+      const rate = (this.commissionPayment.commission_payment_rate || this.currentLedger.exchange_rate || 0.000460);
       let newAmt = this.commissionPayment.amount;
       if (newCur !== prevCur) {
         if (newCur === 'CNY' && prevCur !== 'CNY') {
@@ -1983,6 +1999,7 @@ const app = createApp({
             proof_url: this.commissionPayment.proof_url,
             payment_currency: this.commissionPayment.payment_currency,
             order_details: this.commissionPayment.order_details || [],
+            commission_payment_rate: this.commissionPayment.commission_payment_rate,
           })
         });
         if (res.ok) {
@@ -2014,61 +2031,71 @@ const app = createApp({
             ElementPlus.ElMessage.warning(this.t('msg.excelNoAmount'));
             return;
           }
-          // 自动识别金额列：表头包含 金额/amount/实付/单价/price/总价/total 等关键词
-          const amountKeys = ['金额', '金额(元)', '实付金额', '单价', '总价', '合计', 'amount', 'price', 'total', 'paid', 'sum', '应付金额', '订单金额'];
-          let amountKey = null;
-          const firstRow = rows[0];
-          const headers = Object.keys(firstRow);
-          for (const h of headers) {
-            const hl = String(h).toLowerCase();
-            if (amountKeys.some(k => hl.includes(k.toLowerCase())) ) {
-              amountKey = h;
-              break;
+          // 列头识别：优先精确匹配，再模糊匹配
+          const headers = Object.keys(rows[0]).map(h => String(h).trim());
+          const normalize = s => String(s || '').toLowerCase().replace(/[\s\-_()（）]/g, '');
+          const findHeader = (keys) => {
+            // 先精确匹配
+            for (const h of headers) {
+              if (keys.some(k => normalize(h) === normalize(k))) return h;
             }
-          }
-          // 退而求其次：找第一个看起来是金额（含数字的列）
+            // 再包含子串
+            for (const h of headers) {
+              if (keys.some(k => normalize(h).includes(normalize(k)))) return h;
+            }
+            return null;
+          };
+          const orderNoKeys = ['订单号','订单编号','Order No','OrderNo','Order Number','No.','编号','OrderID','Order ID','单号'];
+          const amountKeys = ['金额','实付金额','应付金额','订单金额','amount','paid','pay amount','total','total amount','price','单价','合计','总价','支付金额'];
+          const remarkKeys = ['备注','说明','remark','note','notes','description','摘要','用途'];
+          const orderNoKey = findHeader(orderNoKeys);
+          let amountKey = findHeader(amountKeys);
+          const remarkKey = findHeader(remarkKeys);
+          // 兜底：第一个可解析为数字且数值>0的列
           if (!amountKey) {
             for (const h of headers) {
-              const sample = String(firstRow[h]).replace(/[,\s]/g, '');
-              if (sample && !isNaN(Number(sample)) && Number(sample) !== 0) {
-                amountKey = h;
-                break;
+              for (const r of rows.slice(0, 10)) {
+                const raw = String(r[h]).replace(/[,\s¥$￥€£₩₹]/g, '').replace(/\((\d+(\.\d+)?)\)/, '-$1');
+                const n = parseFloat(raw);
+                if (!isNaN(n) && n > 0) { amountKey = h; break; }
               }
+              if (amountKey) break;
             }
           }
           if (!amountKey) {
             ElementPlus.ElMessage.warning(this.t('msg.excelNoAmount'));
             return;
           }
+          const parseAmount = (val) => {
+            if (val === null || val === undefined || val === '') return NaN;
+            const s = String(val).replace(/[,\s¥$￥€£₩₹]/g, '').replace(/\((\d+(\.\d+)?)\)/, '-$1');
+            const n = parseFloat(s);
+            return isNaN(n) ? NaN : n;
+          };
           const details = [];
           let total = 0;
+          let skipped = 0;
           for (const r of rows) {
-            const raw = String(r[amountKey] || '').replace(/[,\s¥$￥]/g, '');
-            const amt = parseFloat(raw);
-            if (!isNaN(amt) && amt > 0) {
-              details.push({
-                order_no: r['订单号'] || r['order_no'] || r['OrderNo'] || r['单号'] || (details.length + 1),
-                amount: amt,
-                remark: r['备注'] || r['remark'] || r['说明'] || '',
-              });
-              total += amt;
-            }
+            const amt = parseAmount(r[amountKey]);
+            if (isNaN(amt) || amt <= 0) { skipped++; continue; }
+            details.push({
+              order_no: orderNoKey ? String(r[orderNoKey] || '') : (details.length + 1),
+              amount: amt,
+              remark: remarkKey ? String(r[remarkKey] || '') : '',
+            });
+            total += amt;
           }
           if (!details.length) {
             ElementPlus.ElMessage.warning(this.t('msg.excelNoAmount'));
             return;
           }
-          if (type === 'product') {
-            this.productPayment.order_details = details;
-          } else {
-            this.commissionPayment.order_details = details;
-          }
-          // 自动将识别出的合计金额填入付款金额（仅首次导入且金额为空时）
           const holder = type === 'product' ? this.productPayment : this.commissionPayment;
+          holder.order_details = details;
+          // 自动将识别出的合计金额填入付款金额（仅首次导入且金额为空时）
           if (!holder.amount || holder.amount <= 0) {
             holder.amount = parseFloat(total.toFixed(2));
           }
-          ElementPlus.ElMessage.success(this.t('msg.excelParsed') + '（' + details.length + '）');
+          ElementPlus.ElMessage.success(this.t('msg.excelParsed', {count: details.length, amount: this.fmt(total), skipped: skipped}));
         } catch (err) {
           console.error(err);
           ElementPlus.ElMessage.error(this.t('msg.excelParseFail'));
@@ -2079,6 +2106,17 @@ const app = createApp({
       };
       reader.readAsArrayBuffer(file);
       event.target.value = '';
+    },
+
+    downloadExcelTemplate(type) {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet([
+        { '订单号': 'ORD-001', '金额': 100000, '备注': '示例订单' },
+        { '订单号': 'ORD-002', '金额': 200000, '备注': '' }
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, '订单明细');
+      const fileName = (type === 'product' ? '货值付款' : '佣金付款') + '导入模板.xlsx';
+      XLSX.writeFile(wb, fileName);
     },
 
     viewOrderDetails(row) {
