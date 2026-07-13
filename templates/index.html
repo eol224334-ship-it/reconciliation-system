@@ -150,6 +150,17 @@
     .column-popover .el-checkbox { margin-right: 8px !important; margin-bottom: 6px; }
     .column-popover .el-checkbox__label { font-size: 13px; padding-left: 6px; }
     .column-popover .el-checkbox.is-disabled .el-checkbox__label { color: #c0c4cc; }
+    .col-order-item {
+      display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+      background: #fafbfc; border: 1px solid #eef0f3; margin-bottom: 6px; cursor: default;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .col-order-item:hover { background: #f0f5ff; }
+    .col-order-item.dragging { opacity: 0.45; background: #e6f0ff; box-shadow: 0 2px 8px rgba(22,119,255,0.18); }
+    .col-order-item.locked { background: #f5f5f5; }
+    .col-drag-handle { color: #c0c4cc; cursor: grab; font-size: 13px; }
+    .col-drag-handle:active { cursor: grabbing; }
+    .col-order-item .el-checkbox { flex: 1; }
 
     /* ===== Dialogs ===== */
     .dialog-info-box { background: #f0f5ff; border: 1px solid #adc6ff; border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; }
@@ -414,18 +425,29 @@
               <template #reference>
                 <el-button size="default"><i class="fas fa-columns" style="margin-right:4px;"></i>{{ t('ledger.columnSettings') }}</el-button>
               </template>
-              <div style="max-height:400px;overflow-y:auto;padding:4px;">
-                <div style="font-weight:600;margin-bottom:10px;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="padding:2px;">
+                <div style="font-weight:600;margin-bottom:8px;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
                   <span>{{ t('ledger.customColumns') }}</span>
                   <el-button size="small" text type="primary" @click="resetColumnSettings">{{ t('btn.resetDefault') }}</el-button>
                 </div>
-                <div v-for="(cols, group) in columnGroups" :key="group" style="margin-bottom:14px;">
-                  <div style="font-size:12px;color:#909399;margin-bottom:6px;font-weight:600;">{{ t('group.' + group) }}</div>
-                  <el-checkbox-group v-model="visibleColumnKeys" size="small" style="display:flex;flex-wrap:wrap;gap:6px;">
-                    <el-checkbox v-for="col in cols" :key="col.key" :label="col.key" :disabled="col.key==='actions'" style="margin:0;">
-                      {{ t('col.' + col.key) }}
-                    </el-checkbox>
-                  </el-checkbox-group>
+                <div style="font-size:12px;color:#909399;margin-bottom:8px;line-height:1.5;">
+                  <i class="fas fa-grip-vertical" style="margin-right:4px;"></i>{{ t('ledger.dragHint') }}
+                </div>
+                <div style="max-height:340px;overflow-y:auto;">
+                  <div
+                    v-for="col in availableColumns"
+                    :key="col.key"
+                    class="col-order-item"
+                    :class="{dragging: dragKey === col.key, locked: col.locked}"
+                    draggable="true"
+                    @dragstart="onColDragStart(col.key, $event)"
+                    @dragover.prevent="onColDragOver(col.key)"
+                    @drop="onColDrop(col.key)"
+                    @dragend="onColDragEnd"
+                  >
+                    <i class="fas fa-grip-vertical col-drag-handle"></i>
+                    <el-checkbox v-model="col.visible" :disabled="col.locked" @change="onColVisibleChange">{{ t('col.' + col.key) }}</el-checkbox>
+                  </div>
                 </div>
               </div>
             </el-popover>
@@ -434,123 +456,121 @@
 
           <div class="table-wrap">
             <el-table :data="ledgers" stripe style="width:100%" v-loading="loading" max-height="620"
+              :element-loading-text="t('ledger.loadingText')"
               :key="'ledger-table-' + columnConfigVersion"
               :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
               :empty-text="t('ledger.emptyText')">
-              <el-table-column v-if="isColVisible('index')" key="index" type="index" width="50" label="#" fixed="left"></el-table-column>
-              <el-table-column v-if="isColVisible('customer_name')" key="customer_name" prop="customer_name" :label="t('col.customer_name')" width="160" fixed="left" show-overflow-tooltip>
+              <el-table-column
+                v-for="col in visibleColumns"
+                :key="col.key"
+                :type="col.type"
+                :prop="col.prop"
+                :label="t('col.' + col.key)"
+                :width="col.width"
+                :align="col.align || 'left'"
+                :fixed="col.fixed"
+                :show-overflow-tooltip="!!col.ellipsis"
+              >
                 <template #default="{row}">
-                  <span style="font-weight:600;">{{ row.customer_name }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('company_name')" key="company_name" prop="company_name" :label="t('col.company_name')" width="140" fixed="left" show-overflow-tooltip>
-                <template #default="{row}">
-                  <span style="color:var(--text-secondary);">{{ row.company_name || '-' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('currency')" key="currency" :label="t('col.currency')" width="80" align="center">
-                <template #default="{row}"><span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('payment_item')" key="payment_item" prop="payment_item" :label="t('col.payment_item')" width="100">
-                <template #default="{row}"><el-tag size="small" effect="plain">{{ row.payment_item }}</el-tag></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('order_fee')" key="order_fee" :label="t('col.order_fee')" width="120" align="right">
-                <template #default="{row}"><span class="amount">{{ fmt(row.order_fee) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('commission')" key="commission" :label="t('col.commission')" width="90" align="right">
-                <template #default="{row}"><span class="amount purple">{{ fmt(row.commission) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('total_cost')" key="total_cost" :label="t('col.total_cost')" width="120" align="right">
-                <template #default="{row}"><span class="amount total">{{ fmt(row.total_cost) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('customer_paid')" key="customer_paid" :label="t('col.customer_paid')" width="110" align="right">
-                <template #default="{row}"><span class="amount pos">{{ fmt(row.customer_paid) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('customer_unpaid')" key="customer_unpaid" :label="t('col.customer_unpaid')" width="110" align="right">
-                <template #default="{row}"><span class="amount" :class="{neg: row.customer_unpaid>0}">{{ fmt(row.customer_unpaid) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('ar_status')" key="ar_status" :label="t('col.ar_status')" width="95" align="center">
-                <template #default="{row}"><el-tag :type="statusType(row.ar_status)" size="small" effect="light">{{ statusLabel(row.ar_status,'ar') }}</el-tag></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('customer_proof')" key="customer_proof" :label="t('col.customer_proof')" width="90" align="center">
-                <template #default="{row}">
-                  <img v-if="row.customer_proof_url" :src="row.customer_proof_url" class="proof-thumb" @click="previewImage(row.customer_proof_url)">
-                  <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('collection_date')" key="collection_date" prop="collection_date" :label="t('col.collection_date')" width="105"></el-table-column>
-
-              <!-- Product payment columns -->
-              <el-table-column v-if="isColVisible('product_paid')" key="product_paid" :label="t('col.product_paid')" width="110" align="right">
-                <template #default="{row}"><span class="amount pos">{{ fmt(row.product_paid) }}</span><span v-if="row.product_payment_currency && row.product_payment_currency !== row.currency" class="cur-tag">{{ row.product_payment_currency }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('product_unpaid')" key="product_unpaid" :label="t('col.product_unpaid')" width="110" align="right">
-                <template #default="{row}"><span class="amount" :class="{neg: row.product_unpaid>0}">{{ fmt(row.product_unpaid) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('product_ap_status')" key="product_ap_status" :label="t('col.product_ap_status')" width="90" align="center">
-                <template #default="{row}"><el-tag :type="statusType(row.product_ap_status)" size="small" effect="light">{{ statusLabel(row.product_ap_status,'ap') }}</el-tag></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('product_proof')" key="product_proof" :label="t('col.product_proof')" width="90" align="center">
-                <template #default="{row}">
-                  <img v-if="row.product_proof_url" :src="row.product_proof_url" class="proof-thumb" @click="previewImage(row.product_proof_url)">
-                  <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('product_payment_time')" key="product_payment_time" prop="product_payment_time" :label="t('col.product_payment_time')" width="145"></el-table-column>
-
-              <!-- Commission payment columns -->
-              <el-table-column v-if="isColVisible('commission_paid')" key="commission_paid" :label="t('col.commission_paid')" width="130" align="right">
-                <template #default="{row}">
-                  <span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span>
-                  <div v-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency && row.exchange_rate" style="font-size:11px;color:var(--text-light);">
-                    ({{ fmt(row.commission_payment_currency === 'CNY' ? row.commission_paid * row.exchange_rate : row.commission_paid / row.exchange_rate, 2) }} {{ row.commission_payment_currency }})
-                  </div>
-                  <span v-else-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency" class="cur-tag">{{ row.commission_payment_currency }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('commission_unpaid')" key="commission_unpaid" :label="t('col.commission_unpaid')" width="110" align="right">
-                <template #default="{row}"><span class="amount" :class="{neg: row.commission_unpaid>0}">{{ fmt(row.commission_unpaid) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('commission_ap_status')" key="commission_ap_status" :label="t('col.commission_ap_status')" width="90" align="center">
-                <template #default="{row}"><el-tag :type="statusType(row.commission_ap_status)" size="small" effect="light">{{ statusLabel(row.commission_ap_status,'ap') }}</el-tag></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('commission_proof')" key="commission_proof" :label="t('col.commission_proof')" width="100" align="center">
-                <template #default="{row}">
-                  <img v-if="row.commission_proof_url" :src="row.commission_proof_url" class="proof-thumb" @click="previewImage(row.commission_proof_url)">
-                  <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('attachment')" key="attachment" :label="t('col.attachment')" width="80" align="center">
-                <template #default="{row}">
-                  <a v-if="row.attachment_url" :href="row.attachment_url" target="_blank" style="color:var(--color-primary);font-size:18px;"><i class="fas fa-paperclip"></i></a>
-                  <span v-else style="color:var(--text-light);font-size:12px;">-</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('commission_payment_time')" key="commission_payment_time" prop="commission_payment_time" :label="t('col.commission_payment_time')" width="145"></el-table-column>
-
-              <el-table-column v-if="isColVisible('order_details')" key="order_details" :label="t('col.order_details')" width="120" align="center">
-                <template #default="{row}">
-                  <el-button v-if="row.order_details" size="small" text type="primary" @click="viewOrderDetails(row)">
-                    <i class="fas fa-list" style="margin-right:4px;"></i>{{ t('form.viewOrderDetails') }}
-                  </el-button>
-                  <span v-else style="color:var(--text-light);font-size:12px;">-</span>
-                </template>
-              </el-table-column>
-
-              <el-table-column v-if="isColVisible('total_cost_cny')" key="total_cost_cny" :label="t('col.total_cost_cny')" width="100" align="right">
-                <template #default="{row}"><span style="color:var(--text-light);">&yen;{{ fmt(row.total_cost_cny, 2) }}</span></template>
-              </el-table-column>
-              <el-table-column v-if="isColVisible('remark')" key="remark" prop="remark" :label="t('col.remark')" width="120" show-overflow-tooltip></el-table-column>
-              <el-table-column v-if="isColVisible('actions')" key="actions" :label="t('col.actions')" width="400" fixed="right">
-                <template #default="{row}">
-                  <el-button size="small" text @click="openEdit(row)" :title="t('btn.editRecord')"><i class="fas fa-pen"></i></el-button>
-                  <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> {{ t('btn.receive') }}</el-button>
-                  <el-button size="small" type="success" text @click="openCustomerPayment(row, true)" :title="t('btn.editReceive')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
-                  <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> {{ t('btn.productPayment') }}</el-button>
-                  <el-button size="small" type="warning" text @click="openProductPayment(row, true)" :title="t('btn.editProductPayment')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
-                  <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> {{ t('btn.commissionPayment') }}</el-button>
-                  <el-button size="small" type="primary" text @click="openCommissionPayment(row, true)" :title="t('btn.editCommissionPayment')" style="color:var(--color-purple);padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
-                  <el-button size="small" type="danger" text @click="deleteLedger(row)"><i class="fas fa-trash"></i></el-button>
+                  <template v-if="col.key === 'company_name'">
+                    <span style="color:var(--text-secondary);">{{ row.company_name || '-' }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'customer_name'">
+                    <span style="font-weight:600;">{{ row.customer_name }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'payment_item'">
+                    <el-tag size="small" effect="plain">{{ row.payment_item }}</el-tag>
+                  </template>
+                  <template v-else-if="col.key === 'order_fee'">
+                    <span class="amount">{{ fmt(row.order_fee) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'commission'">
+                    <span class="amount purple">{{ fmt(row.commission) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'total_cost'">
+                    <span class="amount total">{{ fmt(row.total_cost) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'currency'">
+                    <span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'customer_paid'">
+                    <span class="amount pos">{{ fmt(row.customer_paid) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'customer_unpaid'">
+                    <span class="amount" :class="{neg: row.customer_unpaid>0}">{{ fmt(row.customer_unpaid) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'ar_status'">
+                    <el-tag :type="statusType(row.ar_status)" size="small" effect="light">{{ statusLabel(row.ar_status,'ar') }}</el-tag>
+                  </template>
+                  <template v-else-if="col.key === 'customer_proof'">
+                    <img v-if="row.customer_proof_url" :src="row.customer_proof_url" class="proof-thumb" @click="previewImage(row.customer_proof_url)">
+                    <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
+                  </template>
+                  <template v-else-if="col.key === 'collection_date'">
+                    {{ row.collection_date }}
+                  </template>
+                  <template v-else-if="col.key === 'product_paid'">
+                    <span class="amount pos">{{ fmt(row.product_paid) }}</span><span v-if="row.product_payment_currency && row.product_payment_currency !== row.currency" class="cur-tag">{{ row.product_payment_currency }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'product_unpaid'">
+                    <span class="amount" :class="{neg: row.product_unpaid>0}">{{ fmt(row.product_unpaid) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'product_ap_status'">
+                    <el-tag :type="statusType(row.product_ap_status)" size="small" effect="light">{{ statusLabel(row.product_ap_status,'ap') }}</el-tag>
+                  </template>
+                  <template v-else-if="col.key === 'product_proof'">
+                    <img v-if="row.product_proof_url" :src="row.product_proof_url" class="proof-thumb" @click="previewImage(row.product_proof_url)">
+                    <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
+                  </template>
+                  <template v-else-if="col.key === 'product_payment_time'">
+                    {{ row.product_payment_time }}
+                  </template>
+                  <template v-else-if="col.key === 'commission_paid'">
+                    <span class="amount pos" style="color:var(--color-purple);">{{ fmt(row.commission_paid) }}</span>
+                    <div v-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency && row.exchange_rate" style="font-size:11px;color:var(--text-light);">
+                      ({{ fmt(row.commission_payment_currency === 'CNY' ? row.commission_paid * row.exchange_rate : row.commission_paid / row.exchange_rate, 2) }} {{ row.commission_payment_currency }})
+                    </div>
+                    <span v-else-if="row.commission_payment_currency && row.commission_payment_currency !== row.currency" class="cur-tag">{{ row.commission_payment_currency }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'commission_unpaid'">
+                    <span class="amount" :class="{neg: row.commission_unpaid>0}">{{ fmt(row.commission_unpaid) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'commission_ap_status'">
+                    <el-tag :type="statusType(row.commission_ap_status)" size="small" effect="light">{{ statusLabel(row.commission_ap_status,'ap') }}</el-tag>
+                  </template>
+                  <template v-else-if="col.key === 'commission_proof'">
+                    <img v-if="row.commission_proof_url" :src="row.commission_proof_url" class="proof-thumb" @click="previewImage(row.commission_proof_url)">
+                    <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
+                  </template>
+                  <template v-else-if="col.key === 'attachment'">
+                    <a v-if="row.attachment_url" :href="row.attachment_url" target="_blank" style="color:var(--color-primary);font-size:18px;"><i class="fas fa-paperclip"></i></a>
+                    <span v-else style="color:var(--text-light);font-size:12px;">-</span>
+                  </template>
+                  <template v-else-if="col.key === 'commission_payment_time'">
+                    {{ row.commission_payment_time }}
+                  </template>
+                  <template v-else-if="col.key === 'order_details'">
+                    <el-button v-if="row.order_details" size="small" text type="primary" @click="viewOrderDetails(row)">
+                      <i class="fas fa-list" style="margin-right:4px;"></i>{{ t('form.viewOrderDetails') }}
+                    </el-button>
+                    <span v-else style="color:var(--text-light);font-size:12px;">-</span>
+                  </template>
+                  <template v-else-if="col.key === 'total_cost_cny'">
+                    <span style="color:var(--text-light);">&yen;{{ fmt(row.total_cost_cny, 2) }}</span>
+                  </template>
+                  <template v-else-if="col.key === 'remark'">
+                    {{ row.remark }}
+                  </template>
+                  <template v-else-if="col.key === 'actions'">
+                    <el-button size="small" text @click="openEdit(row)" :title="t('btn.editRecord')"><i class="fas fa-pen"></i></el-button>
+                    <el-button size="small" type="success" text @click="openCustomerPayment(row)" :disabled="row.ar_status==='settled'"><i class="fas fa-arrow-down-to-line"></i> {{ t('btn.receive') }}</el-button>
+                    <el-button size="small" type="success" text @click="openCustomerPayment(row, true)" :title="t('btn.editReceive')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                    <el-button size="small" type="warning" text @click="openProductPayment(row)" :disabled="row.product_ap_status==='settled' || row.ar_status==='pending'"><i class="fas fa-box"></i> {{ t('btn.productPayment') }}</el-button>
+                    <el-button size="small" type="warning" text @click="openProductPayment(row, true)" :title="t('btn.editProductPayment')" style="padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                    <el-button size="small" type="primary" text @click="openCommissionPayment(row)" :disabled="row.commission_ap_status==='settled' || row.ar_status==='pending'" style="color:var(--color-purple);"><i class="fas fa-hand-holding-dollar"></i> {{ t('btn.commissionPayment') }}</el-button>
+                    <el-button size="small" type="primary" text @click="openCommissionPayment(row, true)" :title="t('btn.editCommissionPayment')" style="color:var(--color-purple);padding:4px 6px;"><i class="fas fa-pen-to-square"></i></el-button>
+                    <el-button size="small" type="danger" text @click="deleteLedger(row)"><i class="fas fa-trash"></i></el-button>
+                  </template>
                 </template>
               </el-table-column>
             </el-table>
@@ -1092,6 +1112,8 @@ const I18N = {
     'status.ap.partial': '部分付款',
     'status.ap.settled': '已结清',
     'ledger.searchPlaceholder': '搜索客户名称...',
+    'ledger.loadingText': '数据加载中，请稍候...',
+    'ledger.dragHint': '拖拽左侧手柄可调整列顺序，勾选显示/隐藏列',
     'ledger.currency': '币种',
     'ledger.arStatus': 'AR状态',
     'ledger.apStatus': 'AP状态',
@@ -1125,6 +1147,7 @@ const I18N = {
     'col.commission_payment_time': '佣金付款时间',
     'col.order_details': '订单明细',
     'col.no': '序号',
+    'col.index': '#',
     'col.orderNo': '订单号',
     'col.amount': '金额',
     'form.total': '合计',
@@ -1257,6 +1280,8 @@ const I18N = {
     'msg.receiveSuccess': '收款记录成功',
     'msg.operationFail': '操作失败',
     'msg.networkError': '网络错误',
+    'msg.timeout': '请求超时，请稍后重试',
+    'msg.serverError': '服务器错误',
     'msg.enterPaymentAmount': '请输入付款金额',
     'msg.productPaymentUpdated': '货值付款信息已更新',
     'msg.productPaymentSuccess': '货值付款记录成功',
@@ -1319,6 +1344,8 @@ const I18N = {
     'status.ap.partial': 'Partial',
     'status.ap.settled': 'Settled',
     'ledger.searchPlaceholder': 'Search customer name...',
+    'ledger.loadingText': 'Loading data, please wait...',
+    'ledger.dragHint': 'Drag the left handle to reorder columns, check to show/hide',
     'ledger.currency': 'Currency',
     'ledger.arStatus': 'AR Status',
     'ledger.apStatus': 'AP Status',
@@ -1352,6 +1379,7 @@ const I18N = {
     'col.commission_payment_time': 'Comm. Pay Time',
     'col.order_details': 'Order Details',
     'col.no': 'No.',
+    'col.index': '#',
     'col.orderNo': 'Order No.',
     'col.amount': 'Amount',
     'form.total': 'Total',
@@ -1484,6 +1512,8 @@ const I18N = {
     'msg.receiveSuccess': 'Payment recorded successfully',
     'msg.operationFail': 'Operation failed',
     'msg.networkError': 'Network error',
+    'msg.timeout': 'Request timeout, please try again later',
+    'msg.serverError': 'Server error',
     'msg.enterPaymentAmount': 'Please enter payment amount',
     'msg.productPaymentUpdated': 'Product payment info updated',
     'msg.productPaymentSuccess': 'Product payment recorded successfully',
@@ -1584,35 +1614,36 @@ const app = createApp({
 
       columnSettingsVisible: false,
       columnConfigVersion: 0,
+      dragKey: '',
       availableColumns: [
-        { key: 'index', width: 50, fixed: 'left', visible: true, group: 'basic' },
-        { key: 'company_name', width: 140, fixed: 'left', visible: true, group: 'basic' },
-        { key: 'customer_name', width: 160, fixed: 'left', visible: true, group: 'basic' },
-        { key: 'payment_item', width: 100, visible: true, group: 'basic' },
-        { key: 'order_fee', width: 110, visible: true, group: 'cost' },
-        { key: 'commission', width: 90, visible: true, group: 'cost' },
-        { key: 'total_cost', width: 110, visible: true, group: 'cost' },
-        { key: 'currency', width: 80, visible: true, group: 'basic' },
-        { key: 'product_proof', width: 100, visible: true, group: 'proof' },
-        { key: 'commission_proof', width: 100, visible: true, group: 'proof' },
-        { key: 'attachment', width: 80, visible: true, group: 'proof' },
-        { key: 'customer_paid', width: 110, visible: false, group: 'customer_payment' },
-        { key: 'customer_unpaid', width: 110, visible: false, group: 'customer_payment' },
-        { key: 'ar_status', width: 95, visible: false, group: 'customer_payment' },
-        { key: 'customer_proof', width: 90, visible: false, group: 'customer_payment' },
-        { key: 'collection_date', width: 105, visible: false, group: 'customer_payment' },
-        { key: 'product_paid', width: 110, visible: false, group: 'product_payment' },
-        { key: 'product_unpaid', width: 110, visible: false, group: 'product_payment' },
-        { key: 'product_ap_status', width: 90, visible: false, group: 'product_payment' },
-        { key: 'product_payment_time', width: 145, visible: false, group: 'product_payment' },
-        { key: 'commission_paid', width: 130, visible: false, group: 'commission_payment' },
-        { key: 'commission_unpaid', width: 110, visible: false, group: 'commission_payment' },
-        { key: 'commission_ap_status', width: 90, visible: false, group: 'commission_payment' },
-        { key: 'commission_payment_time', width: 145, visible: false, group: 'commission_payment' },
-        { key: 'order_details', width: 120, visible: false, group: 'commission_payment' },
-        { key: 'total_cost_cny', width: 100, visible: false, group: 'cost' },
-        { key: 'remark', width: 120, visible: false, group: 'basic' },
-        { key: 'actions', width: 320, fixed: 'right', visible: true, group: 'basic' },
+        { key: 'index', type: 'index', width: 50, fixed: 'left', visible: true, group: 'basic', locked: true },
+        { key: 'company_name', prop: 'company_name', width: 140, fixed: 'left', visible: true, group: 'basic', ellipsis: true },
+        { key: 'customer_name', prop: 'customer_name', width: 160, fixed: 'left', visible: true, group: 'basic', ellipsis: true },
+        { key: 'payment_item', prop: 'payment_item', width: 100, visible: true, group: 'basic' },
+        { key: 'order_fee', align: 'right', width: 120, visible: true, group: 'cost' },
+        { key: 'commission', align: 'right', width: 90, visible: true, group: 'cost' },
+        { key: 'total_cost', align: 'right', width: 120, visible: true, group: 'cost' },
+        { key: 'currency', align: 'center', width: 80, visible: true, group: 'basic' },
+        { key: 'product_proof', align: 'center', width: 100, visible: true, group: 'proof' },
+        { key: 'commission_proof', align: 'center', width: 100, visible: true, group: 'proof' },
+        { key: 'attachment', align: 'center', width: 80, visible: true, group: 'proof' },
+        { key: 'customer_paid', align: 'right', width: 110, visible: false, group: 'customer_payment' },
+        { key: 'customer_unpaid', align: 'right', width: 110, visible: false, group: 'customer_payment' },
+        { key: 'ar_status', align: 'center', width: 95, visible: false, group: 'customer_payment' },
+        { key: 'customer_proof', align: 'center', width: 90, visible: false, group: 'customer_payment' },
+        { key: 'collection_date', prop: 'collection_date', width: 105, visible: false, group: 'customer_payment' },
+        { key: 'product_paid', align: 'right', width: 110, visible: false, group: 'product_payment' },
+        { key: 'product_unpaid', align: 'right', width: 110, visible: false, group: 'product_payment' },
+        { key: 'product_ap_status', align: 'center', width: 90, visible: false, group: 'product_payment' },
+        { key: 'product_payment_time', prop: 'product_payment_time', width: 145, visible: false, group: 'product_payment' },
+        { key: 'commission_paid', align: 'right', width: 130, visible: false, group: 'commission_payment' },
+        { key: 'commission_unpaid', align: 'right', width: 110, visible: false, group: 'commission_payment' },
+        { key: 'commission_ap_status', align: 'center', width: 90, visible: false, group: 'commission_payment' },
+        { key: 'commission_payment_time', prop: 'commission_payment_time', width: 145, visible: false, group: 'commission_payment' },
+        { key: 'order_details', align: 'center', width: 120, visible: false, group: 'commission_payment' },
+        { key: 'total_cost_cny', align: 'right', width: 100, visible: false, group: 'cost' },
+        { key: 'remark', prop: 'remark', width: 120, visible: false, group: 'basic', ellipsis: true },
+        { key: 'actions', align: 'center', width: 320, fixed: 'right', visible: true, group: 'basic', locked: true },
       ],
     };
   },
@@ -1628,25 +1659,8 @@ const app = createApp({
     pageTitle() {
       return this.t('nav.' + this.tab) || '';
     },
-    columnGroups() {
-      const groups = {};
-      this.availableColumns.forEach(col => {
-        if (!groups[col.group]) groups[col.group] = [];
-        groups[col.group].push(col);
-      });
-      return groups;
-    },
-    visibleColumnKeys: {
-      get() {
-        return this.availableColumns.filter(c => c.visible).map(c => c.key);
-      },
-      set(keys) {
-        this.availableColumns.forEach(c => {
-          c.visible = keys.includes(c.key);
-        });
-        this.columnConfigVersion++;
-        this.saveColumnSettings();
-      }
+    visibleColumns() {
+      return this.availableColumns.filter(c => c.visible);
     },
     commissionNeedsConversion() {
       return this.currentLedger && this.commissionPayment.payment_currency && this.commissionPayment.payment_currency !== this.currentLedger.currency;
@@ -1713,6 +1727,12 @@ const app = createApp({
     clearDraft(key) {
       try { localStorage.removeItem('reconciliationDraft_' + key); } catch(e) {}
     },
+    fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+      return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+      ]);
+    },
     switchTab(t) {
       this.tab = t;
       this.sidebarOpen = false;
@@ -1734,11 +1754,18 @@ const app = createApp({
       if (this.filter.ap_status) params.set('ap_status', this.filter.ap_status);
       if (this.filter.currency) params.set('currency', this.filter.currency);
       try {
-        const res = await fetch('/api/v1/ledgers?' + params.toString());
-        if (!res.ok) throw new Error();
+        const res = await this.fetchWithTimeout('/api/v1/ledgers?' + params.toString(), {}, 120000);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error('HTTP ' + res.status + (text ? ': ' + text : ''));
+        }
         this.ledgers = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadLedgersFail')); }
-      this.loading = false;
+      } catch(e) {
+        console.error('loadLedgers error:', e);
+        ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.loadLedgersFail'));
+      } finally {
+        this.loading = false;
+      }
     },
     resetFilter() {
       this.filter = { customer_name: '', ar_status: '', ap_status: '', currency: '' };
@@ -1757,43 +1784,90 @@ const app = createApp({
         const saved = localStorage.getItem('reconciliationLedgerColumns');
         if (saved) {
           const settings = JSON.parse(saved);
-          settings.forEach(s => {
-            const col = this.availableColumns.find(c => c.key === s.key);
-            if (col) col.visible = s.visible;
+          const visibleMap = {};
+          const orderMap = {};
+          settings.forEach((s, i) => {
+            visibleMap[s.key] = s.visible;
+            orderMap[s.key] = i;
           });
+          this.availableColumns.sort((a, b) => (orderMap[a.key] || 0) - (orderMap[b.key] || 0));
+          this.availableColumns.forEach(c => {
+            if (visibleMap[c.key] !== undefined) c.visible = visibleMap[c.key];
+          });
+          this.columnConfigVersion++;
         }
       } catch(e) {}
     },
     resetColumnSettings() {
+      this.availableColumns.sort((a, b) => (this.defaultColumnOrder.indexOf(a.key) || 0) - (this.defaultColumnOrder.indexOf(b.key) || 0));
       this.availableColumns.forEach(c => c.visible = true);
       this.columnConfigVersion++;
       this.saveColumnSettings();
       ElementPlus.ElMessage.success(this.t('msg.columnReset'));
     },
+    onColDragStart(key, e) {
+      this.dragKey = key;
+      if (e && e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', key);
+      }
+    },
+    onColDragOver(key) {
+      if (!this.dragKey || this.dragKey === key) return;
+      const fromIdx = this.availableColumns.findIndex(c => c.key === this.dragKey);
+      const toIdx = this.availableColumns.findIndex(c => c.key === key);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+      const cols = this.availableColumns;
+      const [moved] = cols.splice(fromIdx, 1);
+      cols.splice(toIdx, 0, moved);
+    },
+    onColDrop(key) {
+      this.dragKey = '';
+      this.saveColumnSettings();
+      this.columnConfigVersion++;
+    },
+    onColDragEnd() {
+      this.dragKey = '';
+    },
+    onColVisibleChange() {
+      this.saveColumnSettings();
+      this.columnConfigVersion++;
+    },
     async loadSummary() {
       try {
-        const res = await fetch('/api/v1/dashboard/summary');
-        if (!res.ok) throw new Error();
+        const res = await this.fetchWithTimeout('/api/v1/dashboard/summary', {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         this.summary = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadDashboardFail')); }
+      } catch(e) {
+        console.error('loadSummary error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.loadDashboardFail'));
+      }
     },
     async loadRates() {
       this.loading = true;
       try {
-        const res = await fetch('/api/v1/rates');
-        if (!res.ok) throw new Error();
+        const res = await this.fetchWithTimeout('/api/v1/rates', {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         this.rates = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadRatesFail')); }
-      this.loading = false;
+      } catch(e) {
+        console.error('loadRates error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.loadRatesFail'));
+      } finally {
+        this.loading = false;
+      }
     },
     async loadAuditLogs() {
       this.loading = true;
       try {
-        const res = await fetch('/api/v1/audit/logs?limit=200');
-        if (!res.ok) throw new Error();
+        const res = await this.fetchWithTimeout('/api/v1/audit/logs?limit=200', {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         this.auditLogs = await res.json();
-      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadAuditFail')); }
-      this.loading = false;
+      } catch(e) {
+        console.error('loadAuditLogs error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.loadAuditFail'));
+      } finally {
+        this.loading = false;
+      }
     },
 
     async onCurrencyChange(currency) {
@@ -2315,15 +2389,18 @@ const app = createApp({
     // ===== Feishu Settings =====
     async loadSettings() {
       try {
-        const res = await fetch('/api/v1/settings');
-        if (!res.ok) throw new Error();
+        const res = await this.fetchWithTimeout('/api/v1/settings', {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         this.feishuConfig = {
           feishu_webhook_url: data.feishu_webhook_url || '',
           feishu_webhook_secret: data.feishu_webhook_secret || '',
           feishu_enabled: data.feishu_enabled || false,
         };
-      } catch(e) { ElementPlus.ElMessage.error(this.t('msg.loadSettingsFail')); }
+      } catch(e) {
+        console.error('loadSettings error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.loadSettingsFail'));
+      }
     },
     async saveFeishuConfig() {
       this.saving = true;
@@ -2416,6 +2493,7 @@ const app = createApp({
   },
 
   mounted() {
+    this.defaultColumnOrder = this.availableColumns.map(c => c.key);
     this.loadColumnSettings();
     this.loadSummary();
   }
