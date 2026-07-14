@@ -128,6 +128,7 @@ def init_db():
             commission_ap_status TEXT NOT NULL DEFAULT 'pending',
             commission_payment_currency TEXT,
             commission_payment_rate DOUBLE PRECISION DEFAULT 0.000460,
+            product_payment_rate DOUBLE PRECISION DEFAULT 0.000460,
             order_details TEXT,
             company_name TEXT,
             attachment_url TEXT,
@@ -239,6 +240,7 @@ def migrate_db():
         ('commission_ap_status', "TEXT NOT NULL DEFAULT 'pending'"),
         ('commission_payment_currency', 'TEXT'),
         ('commission_payment_rate', 'DOUBLE PRECISION DEFAULT 0.000460'),
+        ('product_payment_rate', 'DOUBLE PRECISION DEFAULT 0.000460'),
         ('order_details', 'TEXT'),
         ('company_name', 'TEXT'),
         ('attachment_url', 'TEXT'),
@@ -305,6 +307,7 @@ def enrich_ledger(row):
     d['product_payment_currency'] = d.get('product_payment_currency') or cur
     d['commission_payment_currency'] = d.get('commission_payment_currency') or cur
     d['commission_payment_rate'] = d.get('commission_payment_rate') or d.get('exchange_rate') or 0.000460
+    d['product_payment_rate'] = d.get('product_payment_rate') or d.get('exchange_rate') or 0.000460
     return d
 
 
@@ -565,10 +568,10 @@ def create_ledger():
             collection_date, customer_proof_url,
             product_paid, product_payment_time, product_proof_url, product_payment_currency,
             commission_paid, commission_payment_time, commission_proof_url, commission_payment_currency,
-            commission_payment_rate, order_details, attachment_url,
+            commission_payment_rate, product_payment_rate, order_details, attachment_url,
             fo_paid, fo_payment_time, fo_proof_url,
             currency, exchange_rate, remark, created_by, updated_at, created_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING id""",
         (
             data.get('customer_name', ''),
@@ -588,6 +591,7 @@ def create_ledger():
             data.get('commission_proof_url'),
             data.get('commission_payment_currency'),
             float(data.get('commission_payment_rate', data.get('exchange_rate', 0.000460))),
+            float(data.get('product_payment_rate', data.get('exchange_rate', 0.000460))),
             serialize_order_details(data.get('order_details')),
             data.get('attachment_url'),
             float(data.get('fo_paid', 0)),
@@ -634,7 +638,7 @@ def update_ledger(ledger_id):
     fields = [
         'customer_name', 'company_name', 'payment_item', 'order_fee', 'commission',
         'customer_paid', 'collection_date', 'customer_proof_url',
-        'product_paid', 'product_payment_time', 'product_proof_url', 'product_payment_currency',
+        'product_paid', 'product_payment_time', 'product_proof_url', 'product_payment_currency', 'product_payment_rate',
         'commission_paid', 'commission_payment_time', 'commission_proof_url', 'commission_payment_currency', 'commission_payment_rate',
         'order_details', 'attachment_url',
         'fo_paid', 'fo_payment_time', 'fo_proof_url',
@@ -755,6 +759,11 @@ def product_payment(ledger_id):
         log_audit(db, 'evaluation_expense_ledger', ledger_id, 'order_details', old.get('order_details'), data['order_details'])
         extra_set = ', order_details = %s'
         extra_params = [serialize_order_details(data['order_details'])]
+    if data.get('product_payment_rate') is not None:
+        rate_val = float(data['product_payment_rate'])
+        log_audit(db, 'evaluation_expense_ledger', ledger_id, 'product_payment_rate', old.get('product_payment_rate'), rate_val)
+        extra_set += ', product_payment_rate = %s'
+        extra_params.append(rate_val)
     db.execute(
         'UPDATE evaluation_expense_ledger SET product_paid = %s, product_payment_time = %s, product_proof_url = %s, product_payment_currency = %s' + extra_set + ', updated_at = %s WHERE id = %s',
         (new_paid, data.get('payment_time'), data.get('proof_url'), data.get('payment_currency'), *extra_params,
