@@ -313,8 +313,6 @@ def migrate_order_line_items():
     finally:
         db.close()
 
-    return dict(row) if row else None
-
 
 def rows_to_dicts(rows):
     return [dict(r) for r in rows]
