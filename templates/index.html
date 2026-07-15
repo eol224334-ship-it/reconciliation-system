@@ -284,7 +284,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.3.0 | Order Board Cleanup + Export</div>
+        <div>v3.3.1 | Excel Download Fix</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -2447,15 +2447,17 @@ const app = createApp({
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, '订单导入模板');
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = '订单导入模板.xlsx';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
     },
 
     exportOrders() {
@@ -2482,15 +2484,17 @@ const app = createApp({
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, this.t('orders.title'));
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `订单明细_${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
       ElementPlus.ElMessage.success(this.t('orders.exportSuccess'));
     },
 
