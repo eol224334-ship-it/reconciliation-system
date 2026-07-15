@@ -554,7 +554,8 @@
                     <div v-else class="proof-empty"><i class="fas fa-image"></i></div>
                   </template>
                   <template v-else-if="col.key === 'attachment'">
-                    <a v-if="row.attachment_url" :href="row.attachment_url" target="_blank" style="color:var(--color-primary);font-size:18px;"><i class="fas fa-paperclip"></i></a>
+                    <img v-if="row.attachment_url && isImageUrl(row.attachment_url)" :src="row.attachment_url" class="proof-thumb" @click="previewImage(row.attachment_url)">
+                    <a v-else-if="row.attachment_url" :href="row.attachment_url" target="_blank" style="color:var(--color-primary);font-size:18px;" title="下载附件"><i class="fas fa-paperclip"></i></a>
                     <span v-else style="color:var(--text-light);font-size:12px;">-</span>
                   </template>
                   <template v-else-if="col.key === 'commission_payment_time'">
@@ -2198,6 +2199,13 @@ const app = createApp({
     previewImage(url) {
       this.imagePreviewUrl = url;
       this.imagePreviewVisible = true;
+    },
+    isImageUrl(url) {
+      if (!url) return false;
+      if (url.startsWith('data:image/')) return true;
+      const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg'];
+      const lower = url.split('?')[0].toLowerCase();
+      return imageExts.some(ext => lower.endsWith(ext));
     },
 
     async deleteLedger(row) {
