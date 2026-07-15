@@ -284,7 +284,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.2.0 | Wider Dialogs + Excel Import + Speedup</div>
+        <div>v3.3.0 | Order Board Cleanup + Export</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -619,6 +619,7 @@
                 <el-button type="primary" @click="openOrderDetail()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newOrder') }}</el-button>
                 <el-button @click="$refs.orderExcelInput.click()"><i class="fas fa-file-excel" style="margin-right:4px;"></i>{{ t('orders.importExcel') }}</el-button>
                 <el-button @click="downloadOrderTemplate"><i class="fas fa-download" style="margin-right:4px;"></i>{{ t('orders.importTemplate') }}</el-button>
+                <el-button @click="exportOrders"><i class="fas fa-file-export" style="margin-right:4px;"></i>{{ t('orders.exportExcel') }}</el-button>
                 <input type="file" ref="orderExcelInput" accept=".xlsx,.xls,.csv" style="display:none" @change="handleOrderExcelImport">
               </div>
             </div>
@@ -652,10 +653,6 @@
                   <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalReceived') }}</div>
                   <div style="font-size:20px;font-weight:700;color:#52c41a;">{{ fmt(orderSummary.total_received) }}</div>
                 </div>
-                <div class="summary-card" style="background:#fff0f6;border:1px solid #ffadd2;border-radius:8px;padding:12px;">
-                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalFoFee') }}</div>
-                  <div style="font-size:20px;font-weight:700;color:#eb2f96;">{{ fmt(orderSummary.total_fo_fee) }}</div>
-                </div>
                 <div class="summary-card" style="background:#f9f0ff;border:1px solid #d3adf7;border-radius:8px;padding:12px;">
                   <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalReviewCommission') }}</div>
                   <div style="font-size:20px;font-weight:700;color:#722ed1;">{{ fmt(orderSummary.total_review_commission_rmb) }}</div>
@@ -676,23 +673,14 @@
                   <el-table-column prop="price" :label="t('orders.price')" width="100" align="right">
                     <template #default="{row}"><span class="amount">{{ fmt(row.price, 2) }}</span></template>
                   </el-table-column>
-                  <el-table-column prop="currency" :label="t('orders.currency')" width="90" align="center">
-                    <template #default="{row}"><span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency || 'MYR' }}</span></template>
-                  </el-table-column>
-                  <el-table-column prop="buyer_commission" :label="t('orders.buyerCommission')" width="120" align="right">
-                    <template #default="{row}"><span class="amount">{{ fmt(row.buyer_commission, 2) }}</span></template>
-                  </el-table-column>
                   <el-table-column prop="total_payment" :label="t('orders.totalPayment')" width="120" align="right">
                     <template #default="{row}"><span class="amount total">{{ fmt(row.total_payment, 2) }}</span></template>
                   </el-table-column>
                   <el-table-column prop="total_received" :label="t('orders.totalReceived')" width="120" align="right">
                     <template #default="{row}"><span class="amount pos">{{ fmt(row.total_received, 2) }}</span></template>
                   </el-table-column>
-                  <el-table-column prop="fake_order_fee" :label="t('orders.fakeOrderFee')" width="110" align="right">
-                    <template #default="{row}"><span class="amount">{{ fmt(row.fake_order_fee, 2) }}</span></template>
-                  </el-table-column>
-                  <el-table-column prop="total_fo_fee" :label="t('orders.totalFoFee')" width="120" align="right">
-                    <template #default="{row}"><span class="amount" style="color:var(--color-danger);">{{ fmt(row.total_fo_fee, 2) }}</span></template>
+                  <el-table-column prop="currency" :label="t('orders.currency')" width="90" align="center">
+                    <template #default="{row}"><span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency || 'MYR' }}</span></template>
                   </el-table-column>
                   <el-table-column prop="review_commission_rmb" :label="t('orders.reviewCommissionRmb')" width="130" align="right">
                     <template #default="{row}"><span class="amount purple">{{ fmt(row.review_commission_rmb, 2) }}</span></template>
@@ -861,32 +849,21 @@
         </el-form-item>
       </div>
       <div style="display:flex;gap:12px;">
-        <el-form-item :label="t('orders.buyerCommission')" style="flex:1;">
-          <el-input-number v-model="orderDetailForm.buyer_commission" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
-        </el-form-item>
         <el-form-item :label="t('orders.totalPayment')" style="flex:1;">
           <el-input-number v-model="orderDetailForm.total_payment" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
         </el-form-item>
-      </div>
-      <div style="display:flex;gap:12px;">
         <el-form-item :label="t('orders.totalReceived')" style="flex:1;">
           <el-input-number v-model="orderDetailForm.total_received" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
         </el-form-item>
-        <el-form-item :label="t('orders.fakeOrderFee')" style="flex:1;">
-          <el-input-number v-model="orderDetailForm.fake_order_fee" :min="0" :precision="2" :step="1" style="width:100%" @change="calcOrderTotals"></el-input-number>
-        </el-form-item>
       </div>
       <div style="display:flex;gap:12px;">
-        <el-form-item :label="t('orders.totalFoFee')" style="flex:1;">
-          <el-input-number v-model="orderDetailForm.total_fo_fee" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
-        </el-form-item>
         <el-form-item :label="t('orders.reviewCommissionRmb')" style="flex:1;">
           <el-input-number v-model="orderDetailForm.review_commission_rmb" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
         </el-form-item>
+        <el-form-item :label="t('col.remark')" style="flex:1;">
+          <el-input v-model="orderDetailForm.remark" :placeholder="t('form.remarkPlaceholder')"></el-input>
+        </el-form-item>
       </div>
-      <el-form-item :label="t('col.remark')">
-        <el-input v-model="orderDetailForm.remark" type="textarea" :rows="2" :placeholder="t('form.remarkPlaceholder')"></el-input>
-      </el-form-item>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
@@ -913,22 +890,13 @@
         <el-table-column prop="price" :label="t('orders.price')" width="90" align="right">
           <template #default="{row}"><span class="amount">{{ fmt(row.price, 2) }}</span></template>
         </el-table-column>
-        <el-table-column prop="currency" :label="t('orders.currency')" width="80" align="center"></el-table-column>
-        <el-table-column prop="buyer_commission" :label="t('orders.buyerCommission')" width="100" align="right">
-          <template #default="{row}"><span class="amount">{{ fmt(row.buyer_commission, 2) }}</span></template>
-        </el-table-column>
         <el-table-column prop="total_payment" :label="t('orders.totalPayment')" width="100" align="right">
           <template #default="{row}"><span class="amount">{{ fmt(row.total_payment, 2) }}</span></template>
         </el-table-column>
         <el-table-column prop="total_received" :label="t('orders.totalReceived')" width="100" align="right">
           <template #default="{row}"><span class="amount">{{ fmt(row.total_received, 2) }}</span></template>
         </el-table-column>
-        <el-table-column prop="fake_order_fee" :label="t('orders.fakeOrderFee')" width="100" align="right">
-          <template #default="{row}"><span class="amount">{{ fmt(row.fake_order_fee, 2) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="total_fo_fee" :label="t('orders.totalFoFee')" width="100" align="right">
-          <template #default="{row}"><span class="amount">{{ fmt(row.total_fo_fee, 2) }}</span></template>
-        </el-table-column>
+        <el-table-column prop="currency" :label="t('orders.currency')" width="80" align="center"></el-table-column>
         <el-table-column prop="review_commission_rmb" :label="t('orders.reviewCommissionRmb')" width="120" align="right">
           <template #default="{row}"><span class="amount">{{ fmt(row.review_commission_rmb, 2) }}</span></template>
         </el-table-column>
@@ -1304,12 +1272,15 @@ const I18N = {
     'btn.newOrder': '新增订单',
     'orders.importExcel': '导入 Excel',
     'orders.importTemplate': '下载导入模板',
+    'orders.exportExcel': '导出 Excel',
+    'orders.exportSuccess': '导出成功',
+    'orders.exportEmpty': '当前没有可导出的订单数据',
     'orders.importSuccess': '成功导入 {count} 条订单',
     'orders.importFail': '导入失败',
     'orders.importEmpty': '未识别到有效订单数据',
     'orders.importPreview': 'Excel 导入预览',
     'orders.importRows': '共识别 {count} 条，确认后批量保存',
-    'orders.fieldsHint': '支持列：日期、平台、店铺、订单号、商品、数量、单价、货币、买家佣金、总付款、实际到账、刷单费、FO总费用、测评佣金(RMB)、备注',
+    'orders.fieldsHint': '支持列：日期、平台、店铺、订单号、商品SKU、数量、商品单价、货币、商品总货值、实际金额、测评佣金(RMB)、备注',
     'orders.importAllNew': '全部新建',
     'orders.appendToExisting': '追加到现有',
     'orders.title': '订单明细',
@@ -1317,13 +1288,13 @@ const I18N = {
     'orders.platform': '平台',
     'orders.platformStore': '店铺',
     'orders.orderNo': '订单号',
-    'orders.item': '商品',
+    'orders.item': '商品SKU',
     'orders.qty': '数量',
-    'orders.price': '单价',
+    'orders.price': '商品单价',
     'orders.currency': '货币',
     'orders.buyerCommission': '买家佣金',
-    'orders.totalPayment': '总付款',
-    'orders.totalReceived': '实际到账',
+    'orders.totalPayment': '商品总货值',
+    'orders.totalReceived': '实际金额',
     'orders.fakeOrderFee': '刷单费',
     'orders.totalFoFee': 'FO总费用',
     'orders.reviewCommissionRmb': '测评佣金(RMB)',
@@ -1567,12 +1538,15 @@ const I18N = {
     'btn.newOrder': 'New Order',
     'orders.importExcel': 'Import Excel',
     'orders.importTemplate': 'Download Template',
+    'orders.exportExcel': 'Export Excel',
+    'orders.exportSuccess': 'Export successful',
+    'orders.exportEmpty': 'No order data to export',
     'orders.importSuccess': 'Imported {count} orders',
     'orders.importFail': 'Import failed',
     'orders.importEmpty': 'No valid orders found',
     'orders.importPreview': 'Excel Import Preview',
     'orders.importRows': 'Found {count} rows, click confirm to save',
-    'orders.fieldsHint': 'Supported columns: Date, Platform, Store, Order No, Item, Qty, Price, Currency, Buyer Commission, Total Payment, Total Received, Fake Order Fee, Total FO Fee, Review Commission(RMB), Remark',
+    'orders.fieldsHint': 'Supported columns: Date, Platform, Store, Order No, Product SKU, Qty, Unit Price, Currency, Total Product Value, Actual Amount, Review Commission(RMB), Remark',
     'orders.importAllNew': 'Import All',
     'orders.appendToExisting': 'Append to Existing',
     'orders.title': 'Order Details',
@@ -1580,13 +1554,13 @@ const I18N = {
     'orders.platform': 'Platform',
     'orders.platformStore': 'Store',
     'orders.orderNo': 'Order No.',
-    'orders.item': 'Item',
+    'orders.item': 'Product SKU',
     'orders.qty': 'Qty',
-    'orders.price': 'Price',
+    'orders.price': 'Unit Price',
     'orders.currency': 'Currency',
     'orders.buyerCommission': 'Buyer Commission',
-    'orders.totalPayment': 'Total Payment',
-    'orders.totalReceived': 'Total Received',
+    'orders.totalPayment': 'Total Product Value',
+    'orders.totalReceived': 'Actual Amount',
     'orders.fakeOrderFee': 'Fake Order Fee',
     'orders.totalFoFee': 'Total FO Fee',
     'orders.reviewCommissionRmb': 'Review Commission(RMB)',
@@ -2280,9 +2254,7 @@ const app = createApp({
     calcOrderTotals() {
       const qty = Number(this.orderDetailForm.qty) || 0;
       const price = Number(this.orderDetailForm.price) || 0;
-      const fakeOrderFee = Number(this.orderDetailForm.fake_order_fee) || 0;
       this.orderDetailForm.total_payment = parseFloat((qty * price).toFixed(2));
-      this.orderDetailForm.total_fo_fee = parseFloat((qty * fakeOrderFee).toFixed(2));
     },
     async saveOrderDetail() {
       if (!this.orderDetailForm.order_date || !this.orderDetailForm.platform || !this.orderDetailForm.platform_store) {
@@ -2365,16 +2337,16 @@ const app = createApp({
       tryMap(['平台', 'platform', '渠道', 'channel'], 'platform');
       tryMap(['店铺', 'store', 'platformstore', 'platform_store'], 'platform_store');
       tryMap(['订单号', '订单', 'orderno', 'order_no', 'order'], 'order_no');
-      tryMap(['商品', 'item', '产品', 'product', 'sku', '名称', 'name'], 'item');
+      tryMap(['商品sku', 'sku', '商品', 'item', '产品', 'product', '名称', 'name'], 'item');
       tryMap(['数量', 'qty', 'quantity', '件数', '件'], 'qty');
-      tryMap(['单价', 'price', 'unitprice', 'unit'], 'price');
+      tryMap(['商品单价', '单价', 'price', 'unitprice', 'unit'], 'price');
       tryMap(['货币', 'currency', '币种', 'money'], 'currency');
-      tryMap(['买家佣金', 'buyercommission', 'buyer', 'commission'], 'buyer_commission');
-      tryMap(['总付款', 'totalpayment', 'payment', 'totalpay', '付款'], 'total_payment');
-      tryMap(['实际到账', 'totalreceived', 'received', '到账', 'actual'], 'total_received');
+      tryMap(['买家佣金', 'buyercommission', 'buyer', '买家'], 'buyer_commission');
+      tryMap(['商品总货值', '总付款', 'totalpayment', 'payment', 'totalpay', '付款', 'productvalue', 'totalvalue'], 'total_payment');
+      tryMap(['实际金额', '实际到账', 'totalreceived', 'received', '到账', 'actual', 'actualamount'], 'total_received');
       tryMap(['刷单费', 'fakeorderfee', 'fakeorder', 'fake', 'orderfee'], 'fake_order_fee');
       tryMap(['fo总费用', 'totalfOfee', 'totalfofee', 'fofee', 'fo总费'], 'total_fo_fee');
-      tryMap(['测评佣金', 'reviewcommission', 'review', 'rmb', '佣金'], 'review_commission_rmb');
+      tryMap(['测评佣金', '测评佣金rmb', '测评佣金(rmb)', '测评佣金（rmb）', 'reviewcommission', 'reviewcommissionrmb', 'reviewcommission(rmb)', 'reviewcommission（rmb）', 'review', 'rmb', '佣金'], 'review_commission_rmb');
       tryMap(['备注', 'remark', 'note', 'comment'], 'remark');
       const get = (row, key, fallback) => {
         const idx = colMap[key];
@@ -2467,9 +2439,9 @@ const app = createApp({
       }
     },
     downloadOrderTemplate() {
-      const headers = ['日期', '平台', '店铺', '订单号', '商品', '数量', '单价', '货币', '买家佣金', '总付款', '实际到账', '刷单费', 'FO总费用', '测评佣金(RMB)', '备注'];
+      const headers = ['日期', '平台', '店铺', '订单号', '商品SKU', '数量', '商品单价', '货币', '商品总货值', '实际金额', '测评佣金(RMB)', '备注'];
       const sample = [
-        ['2026-07-15', 'Shopee', 'Redragon Store', 'ORDER-001', 'Product A', 2, 100.00, 'MYR', 5.00, 200.00, 195.00, 10.00, 20.00, 50.00, 'Sample order'],
+        ['2026-07-15', 'Shopee', 'Redragon Store', 'ORDER-001', 'SKU-001', 2, 100.00, 'MYR', 200.00, 195.00, 50.00, 'Sample order'],
       ];
       const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
       const wb = XLSX.utils.book_new();
@@ -2484,6 +2456,42 @@ const app = createApp({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    },
+
+    exportOrders() {
+      if (!this.orderDetails || !this.orderDetails.length) {
+        ElementPlus.ElMessage.warning(this.t('orders.exportEmpty'));
+        return;
+      }
+      const headers = [this.t('orders.date'), this.t('orders.platform'), this.t('orders.platformStore'), this.t('orders.orderNo'), this.t('orders.item'), this.t('orders.qty'), this.t('orders.price'), this.t('orders.totalPayment'), this.t('orders.totalReceived'), this.t('orders.currency'), this.t('orders.reviewCommissionRmb'), this.t('col.remark')];
+      const rows = this.orderDetails.map(row => [
+        row.order_date,
+        row.platform,
+        row.platform_store,
+        row.order_no,
+        row.item,
+        row.qty,
+        row.price,
+        row.total_payment,
+        row.total_received,
+        row.currency || 'MYR',
+        row.review_commission_rmb,
+        row.remark
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, this.t('orders.title'));
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `订单明细_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      ElementPlus.ElMessage.success(this.t('orders.exportSuccess'));
     },
 
     async onCurrencyChange(currency) {
