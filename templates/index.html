@@ -169,6 +169,24 @@
     .dialog-info-box .row b { font-weight: 600; }
     .dialog-warn-box { background: #fffbe6; border: 1px solid #ffe58f; border-radius: var(--radius); padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: #ad6800; display: flex; align-items: center; gap: 8px; }
 
+    .wide-dialog .el-dialog__body { padding: 16px 24px 8px; }
+    .wide-dialog .el-form-item { margin-bottom: 16px; }
+    .wide-dialog .el-dialog__footer { padding: 12px 24px 20px; }
+    .order-dialog .el-form-item__label,
+    .ledger-dialog .el-form-item__label { font-weight: 500; }
+    .ledger-dialog .upload-row { flex-wrap: nowrap; }
+    @media (max-width: 992px) {
+      .wide-dialog { width: 92vw !important; max-width: 92vw !important; }
+      .wide-dialog .el-form-item { margin-bottom: 14px; }
+    }
+    @media (max-width: 768px) {
+      .wide-dialog { width: 96vw !important; max-width: 96vw !important; }
+      .wide-dialog .el-dialog__body { padding: 12px 16px 4px; }
+      .wide-dialog .el-dialog__footer { padding: 10px 16px 16px; }
+      .ledger-dialog .upload-row { flex-wrap: wrap; }
+      .ledger-dialog .upload-row .upload-btn { width: 100%; justify-content: center; }
+    }
+
     /* ===== Payment Amount Row ===== */
     .payment-amount-row { display: flex; gap: 12px; align-items: flex-end; width: 100%; }
     .payment-amount-row .pay-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -266,7 +284,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.1.0 | Multi-Currency + Feishu + Orders</div>
+        <div>v3.2.0 | Wider Dialogs + Excel Import + Speedup</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -597,7 +615,12 @@
           <div class="card">
             <div class="card-header">
               <h3><i class="fas fa-clipboard-list" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('orders.title') }}</h3>
-              <el-button type="primary" @click="openOrderDetail()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newOrder') }}</el-button>
+              <div>
+                <el-button type="primary" @click="openOrderDetail()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newOrder') }}</el-button>
+                <el-button @click="$refs.orderExcelInput.click()"><i class="fas fa-file-excel" style="margin-right:4px;"></i>{{ t('orders.importExcel') }}</el-button>
+                <el-button @click="downloadOrderTemplate"><i class="fas fa-download" style="margin-right:4px;"></i>{{ t('orders.importTemplate') }}</el-button>
+                <input type="file" ref="orderExcelInput" accept=".xlsx,.xls,.csv" style="display:none" @change="handleOrderExcelImport">
+              </div>
             </div>
             <div class="card-body">
               <div class="filter-bar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
@@ -799,7 +822,7 @@
   </div>
 
   <!-- ==================== Order Detail Dialog ==================== -->
-  <el-dialog :title="orderDetailDialog.editing ? t('dialog.editOrder') : t('dialog.newOrder')" v-model="orderDetailDialog.visible" width="620px" :close-on-click-modal="false">
+  <el-dialog :title="orderDetailDialog.editing ? t('dialog.editOrder') : t('dialog.newOrder')" v-model="orderDetailDialog.visible" width="860px" :close-on-click-modal="false" class="wide-dialog order-dialog">
     <el-form :model="orderDetailForm" label-width="120px">
       <div style="display:flex;gap:12px;">
         <el-form-item :label="t('orders.date')" required style="flex:1;">
@@ -873,8 +896,53 @@
     </template>
   </el-dialog>
 
+  <!-- ==================== Order Excel Import Dialog ==================== -->
+  <el-dialog :title="t('orders.importPreview')" v-model="orderImportDialogVisible" width="960px" :close-on-click-modal="false" class="wide-dialog">
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6;">{{ t('orders.fieldsHint') }}</p>
+    <div class="table-wrap" style="max-height:420px;overflow:auto;">
+      <el-table :data="orderImportPreview" stripe style="width:100%" max-height="380"
+        :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
+        :empty-text="t('orders.importEmpty')">
+        <el-table-column type="index" width="45" label="#"></el-table-column>
+        <el-table-column prop="order_date" :label="t('orders.date')" width="110"></el-table-column>
+        <el-table-column prop="platform" :label="t('orders.platform')" width="100"></el-table-column>
+        <el-table-column prop="platform_store" :label="t('orders.platformStore')" width="120" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="order_no" :label="t('orders.orderNo')" width="110" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="item" :label="t('orders.item')" min-width="120" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="qty" :label="t('orders.qty')" width="70" align="right"></el-table-column>
+        <el-table-column prop="price" :label="t('orders.price')" width="90" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.price, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="currency" :label="t('orders.currency')" width="80" align="center"></el-table-column>
+        <el-table-column prop="buyer_commission" :label="t('orders.buyerCommission')" width="100" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.buyer_commission, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="total_payment" :label="t('orders.totalPayment')" width="100" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.total_payment, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="total_received" :label="t('orders.totalReceived')" width="100" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.total_received, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="fake_order_fee" :label="t('orders.fakeOrderFee')" width="100" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.fake_order_fee, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="total_fo_fee" :label="t('orders.totalFoFee')" width="100" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.total_fo_fee, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="review_commission_rmb" :label="t('orders.reviewCommissionRmb')" width="120" align="right">
+          <template #default="{row}"><span class="amount">{{ fmt(row.review_commission_rmb, 2) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="remark" :label="t('col.remark')" min-width="100" show-overflow-tooltip></el-table-column>
+      </el-table>
+    </div>
+    <template #footer>
+      <el-button @click="orderImportDialogVisible=false">{{ t('btn.cancel') }}</el-button>
+      <el-button type="primary" @click="importOrders" :loading="saving">{{ t('orders.importAllNew') }}</el-button>
+    </template>
+  </el-dialog>
+
   <!-- ==================== Create/Edit Dialog ==================== -->
-  <el-dialog :title="editing ? t('dialog.editRecord') : t('dialog.newRecord')" v-model="dialogVisible" width="680px" :close-on-click-modal="false">
+  <el-dialog :title="editing ? t('dialog.editRecord') : t('dialog.newRecord')" v-model="dialogVisible" width="920px" :close-on-click-modal="false" class="wide-dialog ledger-dialog">
     <el-form :model="form" label-width="110px">
       <el-form-item :label="t('form.customerName')" required>
         <el-input v-model="form.customer_name" placeholder="Redragon Store Jatim">
@@ -1202,6 +1270,7 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus@2.7.6/dist/index.full.min.js"></script>
 <script src="https://unpkg.com/@element-plus/icons-vue@2/dist/index.iife.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const { createApp, ref, reactive, computed, onMounted } = Vue;
 
@@ -1233,6 +1302,16 @@ const I18N = {
     'btn.viewDetails': '查看明细',
     'btn.feishuSettings': '飞书设置',
     'btn.newOrder': '新增订单',
+    'orders.importExcel': '导入 Excel',
+    'orders.importTemplate': '下载导入模板',
+    'orders.importSuccess': '成功导入 {count} 条订单',
+    'orders.importFail': '导入失败',
+    'orders.importEmpty': '未识别到有效订单数据',
+    'orders.importPreview': 'Excel 导入预览',
+    'orders.importRows': '共识别 {count} 条，确认后批量保存',
+    'orders.fieldsHint': '支持列：日期、平台、店铺、订单号、商品、数量、单价、货币、买家佣金、总付款、实际到账、刷单费、FO总费用、测评佣金(RMB)、备注',
+    'orders.importAllNew': '全部新建',
+    'orders.appendToExisting': '追加到现有',
     'orders.title': '订单明细',
     'orders.date': '日期',
     'orders.platform': '平台',
@@ -1434,7 +1513,7 @@ const I18N = {
     'msg.receiveSuccess': '收款记录成功',
     'msg.operationFail': '操作失败',
     'msg.networkError': '网络错误',
-    'msg.timeout': '请求超时，请稍后重试',
+    'msg.timeout': '服务器响应较慢，已自动重试，请稍候（Render 免费版冷启动约需 15-30 秒）',
     'msg.serverError': '服务器错误',
     'msg.enterPaymentAmount': '请输入付款金额',
     'msg.productPaymentUpdated': '货值付款信息已更新',
@@ -1486,6 +1565,16 @@ const I18N = {
     'btn.viewDetails': 'View Details',
     'btn.feishuSettings': 'Feishu Settings',
     'btn.newOrder': 'New Order',
+    'orders.importExcel': 'Import Excel',
+    'orders.importTemplate': 'Download Template',
+    'orders.importSuccess': 'Imported {count} orders',
+    'orders.importFail': 'Import failed',
+    'orders.importEmpty': 'No valid orders found',
+    'orders.importPreview': 'Excel Import Preview',
+    'orders.importRows': 'Found {count} rows, click confirm to save',
+    'orders.fieldsHint': 'Supported columns: Date, Platform, Store, Order No, Item, Qty, Price, Currency, Buyer Commission, Total Payment, Total Received, Fake Order Fee, Total FO Fee, Review Commission(RMB), Remark',
+    'orders.importAllNew': 'Import All',
+    'orders.appendToExisting': 'Append to Existing',
     'orders.title': 'Order Details',
     'orders.date': 'Date',
     'orders.platform': 'Platform',
@@ -1687,7 +1776,7 @@ const I18N = {
     'msg.receiveSuccess': 'Payment recorded successfully',
     'msg.operationFail': 'Operation failed',
     'msg.networkError': 'Network error',
-    'msg.timeout': 'Request timeout, please try again later',
+    'msg.timeout': 'Server is slow to respond, retrying... (Render free tier cold start may take 15-30s)',
     'msg.serverError': 'Server error',
     'msg.enterPaymentAmount': 'Please enter payment amount',
     'msg.productPaymentUpdated': 'Product payment info updated',
@@ -1787,6 +1876,8 @@ const app = createApp({
       orderStores: [],
       orderDetailDialog: { visible: false, editing: false },
       orderDetailForm: { id: null, order_date: '', platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, currency: 'MYR', buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' },
+      orderImportDialogVisible: false,
+      orderImportPreview: [],
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -1917,11 +2008,18 @@ const app = createApp({
     clearDraft(key) {
       try { localStorage.removeItem('reconciliationDraft_' + key); } catch(e) {}
     },
-    fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
-      return Promise.race([
+    fetchWithTimeout(url, options = {}, timeoutMs = 30000, retries = 1) {
+      const attempt = () => Promise.race([
         fetch(url, options),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
       ]);
+      return attempt().catch(async (err) => {
+        if (err.message === 'timeout' && retries > 0) {
+          console.warn('request timeout, retrying:', url);
+          return this.fetchWithTimeout(url, options, timeoutMs, retries - 1);
+        }
+        throw err;
+      });
     },
     switchTab(t) {
       this.tab = t;
@@ -1944,7 +2042,7 @@ const app = createApp({
       if (this.filter.ap_status) params.set('ap_status', this.filter.ap_status);
       if (this.filter.currency) params.set('currency', this.filter.currency);
       try {
-        const res = await this.fetchWithTimeout('/api/v1/ledgers?' + params.toString(), {}, 120000);
+        const res = await this.fetchWithTimeout('/api/v1/ledgers?' + params.toString(), {}, 30000, 2);
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error('HTTP ' + res.status + (text ? ': ' + text : ''));
@@ -1952,7 +2050,8 @@ const app = createApp({
         this.ledgers = await res.json();
       } catch(e) {
         console.error('loadLedgers error:', e);
-        ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.loadLedgersFail'));
+        const msg = e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.loadLedgersFail');
+        ElementPlus.ElMessage.error(msg);
       } finally {
         this.loading = false;
         this.collectPaymentItemsFromLedgers();
@@ -2114,15 +2213,18 @@ const app = createApp({
         }
         if (this.orderFilter.platform) params.append('platform', this.orderFilter.platform);
         if (this.orderFilter.platform_store) params.append('platform_store', this.orderFilter.platform_store);
-        const res = await this.fetchWithTimeout('/api/v1/order-details?' + params.toString(), {}, 30000);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        this.orderDetails = await res.json();
-        await this.loadOrderSummary();
-        await this.loadOrderPlatforms();
-        await this.loadOrderStores();
+        const [listRes] = await Promise.all([
+          this.fetchWithTimeout('/api/v1/order-details?' + params.toString(), {}, 30000, 2),
+          this.loadOrderSummary(),
+          this.loadOrderPlatforms(),
+          this.loadOrderStores(),
+        ]);
+        if (!listRes.ok) throw new Error('HTTP ' + listRes.status);
+        this.orderDetails = await listRes.json();
       } catch(e) {
         console.error('loadOrderDetails error:', e);
-        ElementPlus.ElMessage.error(this.t('msg.loadOrderDetailsFail'));
+        const msg = e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.loadOrderDetailsFail');
+        ElementPlus.ElMessage.error(msg);
       } finally {
         this.loading = false;
       }
@@ -2225,6 +2327,165 @@ const app = createApp({
       }
     },
 
+    handleOrderExcelImport(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = new Uint8Array(ev.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+          this.parseOrderExcelRows(json);
+          this.orderImportDialogVisible = true;
+        } catch(err) {
+          console.error('excel import error:', err);
+          ElementPlus.ElMessage.error(this.t('orders.importFail'));
+        }
+      };
+      reader.onerror = () => {
+        ElementPlus.ElMessage.error(this.t('orders.importFail'));
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
+    },
+    parseOrderExcelRows(rows) {
+      if (!rows || rows.length < 2) {
+        this.orderImportPreview = [];
+        return;
+      }
+      const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/\s+/g, '').replace(/[()]/g, ''));
+      const colMap = {};
+      const tryMap = (names, key) => {
+        const idx = headers.findIndex(h => names.some(n => h.includes(n)));
+        if (idx !== -1) colMap[key] = idx;
+      };
+      tryMap(['日期', 'date', '时间', 'time'], 'order_date');
+      tryMap(['平台', 'platform', '渠道', 'channel'], 'platform');
+      tryMap(['店铺', 'store', 'platformstore', 'platform_store'], 'platform_store');
+      tryMap(['订单号', '订单', 'orderno', 'order_no', 'order'], 'order_no');
+      tryMap(['商品', 'item', '产品', 'product', 'sku', '名称', 'name'], 'item');
+      tryMap(['数量', 'qty', 'quantity', '件数', '件'], 'qty');
+      tryMap(['单价', 'price', 'unitprice', 'unit'], 'price');
+      tryMap(['货币', 'currency', '币种', 'money'], 'currency');
+      tryMap(['买家佣金', 'buyercommission', 'buyer', 'commission'], 'buyer_commission');
+      tryMap(['总付款', 'totalpayment', 'payment', 'totalpay', '付款'], 'total_payment');
+      tryMap(['实际到账', 'totalreceived', 'received', '到账', 'actual'], 'total_received');
+      tryMap(['刷单费', 'fakeorderfee', 'fakeorder', 'fake', 'orderfee'], 'fake_order_fee');
+      tryMap(['fo总费用', 'totalfOfee', 'totalfofee', 'fofee', 'fo总费'], 'total_fo_fee');
+      tryMap(['测评佣金', 'reviewcommission', 'review', 'rmb', '佣金'], 'review_commission_rmb');
+      tryMap(['备注', 'remark', 'note', 'comment'], 'remark');
+      const get = (row, key, fallback) => {
+        const idx = colMap[key];
+        if (idx === undefined || idx >= row.length) return fallback;
+        const v = row[idx];
+        if (v === undefined || v === null || v === '') return fallback;
+        return v;
+      };
+      const parseNum = (v) => {
+        if (typeof v === 'number') return v;
+        const s = String(v).replace(/,/g, '').trim();
+        if (!s) return 0;
+        const n = Number(s);
+        return isNaN(n) ? 0 : n;
+      };
+      const parseDate = (v) => {
+        if (!v) return new Date().toISOString().slice(0, 10);
+        if (typeof v === 'number') {
+          // Excel serial date
+          const epoch = new Date(1899, 11, 30);
+          const d = new Date(epoch.getTime() + v * 86400000);
+          return d.toISOString().slice(0, 10);
+        }
+        const s = String(v).trim();
+        if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) return s.replace(/\//g, '-');
+        if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(s)) {
+          const [a,b,c] = s.split(/[-/]/);
+          return `${c}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+        }
+        return s;
+      };
+      const parsed = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.every(c => String(c).trim() === '')) continue;
+        const qty = parseNum(get(row, 'qty', 0));
+        const price = parseNum(get(row, 'price', 0));
+        const fakeOrderFee = parseNum(get(row, 'fake_order_fee', 0));
+        const currency = String(get(row, 'currency', 'MYR')).trim().toUpperCase() || 'MYR';
+        const totalPayment = parseNum(get(row, 'total_payment', qty * price));
+        const totalFoFee = parseNum(get(row, 'total_fo_fee', qty * fakeOrderFee));
+        parsed.push({
+          order_date: parseDate(get(row, 'order_date', '')),
+          platform: String(get(row, 'platform', '')).trim(),
+          platform_store: String(get(row, 'platform_store', '')).trim(),
+          order_no: String(get(row, 'order_no', '')).trim(),
+          item: String(get(row, 'item', '')).trim(),
+          qty: qty,
+          price: price,
+          currency: currency,
+          buyer_commission: parseNum(get(row, 'buyer_commission', 0)),
+          total_payment: totalPayment,
+          total_received: parseNum(get(row, 'total_received', 0)),
+          fake_order_fee: fakeOrderFee,
+          total_fo_fee: totalFoFee,
+          review_commission_rmb: parseNum(get(row, 'review_commission_rmb', 0)),
+          remark: String(get(row, 'remark', '')).trim(),
+        });
+      }
+      this.orderImportPreview = parsed;
+    },
+    async importOrders() {
+      if (!this.orderImportPreview.length) {
+        ElementPlus.ElMessage.warning(this.t('orders.importEmpty'));
+        return;
+      }
+      this.saving = true;
+      let successCount = 0;
+      let failCount = 0;
+      for (const row of this.orderImportPreview) {
+        try {
+          const res = await this.fetchWithTimeout('/api/v1/order-details', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(row)
+          }, 30000);
+          if (res.ok) successCount++; else failCount++;
+        } catch(e) {
+          console.error('import order row error:', e);
+          failCount++;
+        }
+      }
+      this.saving = false;
+      this.orderImportDialogVisible = false;
+      if (successCount) {
+        ElementPlus.ElMessage.success(this.t('orders.importSuccess', { count: successCount }));
+        this.loadOrderDetails();
+      }
+      if (failCount) {
+        ElementPlus.ElMessage.error(this.t('orders.importFail') + ' ' + failCount + ' 条');
+      }
+    },
+    downloadOrderTemplate() {
+      const headers = ['日期', '平台', '店铺', '订单号', '商品', '数量', '单价', '货币', '买家佣金', '总付款', '实际到账', '刷单费', 'FO总费用', '测评佣金(RMB)', '备注'];
+      const sample = [
+        ['2026-07-15', 'Shopee', 'Redragon Store', 'ORDER-001', 'Product A', 2, 100.00, 'MYR', 5.00, 200.00, 195.00, 10.00, 20.00, 50.00, 'Sample order'],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '订单导入模板');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '订单导入模板.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
     async onCurrencyChange(currency) {
       // 汇率管理已移除，保留手动编辑；不再自动从系统汇率表填充
     },
@@ -2285,21 +2546,29 @@ const app = createApp({
       };
       try {
         if (this.editing) {
-          const res = await fetch('/api/v1/ledgers/' + this.form.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
-          if (!res.ok) throw new Error();
+          const res = await this.fetchWithTimeout('/api/v1/ledgers/' + this.form.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }, 30000, 2);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const updated = await res.json();
+          const idx = this.ledgers.findIndex(l => l.id === updated.id);
+          if (idx !== -1) this.ledgers.splice(idx, 1, updated);
           ElementPlus.ElMessage.success(this.t('msg.modifySuccess'));
           this.clearDraft('edit_' + this.form.id);
         } else {
-          const res = await fetch('/api/v1/ledgers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
-          if (!res.ok) throw new Error();
+          const res = await this.fetchWithTimeout('/api/v1/ledgers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }, 30000, 2);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const created = await res.json();
+          this.ledgers.unshift(created);
           ElementPlus.ElMessage.success(this.t('msg.createSuccess'));
           this.clearDraft('create');
         }
         this.dialogVisible = false;
-        this.loadLedgers();
         this.loadSummary();
+        // 后台静默刷新列表，避免用户等待
+        setTimeout(() => this.loadLedgers(), 100);
       } catch(e) {
-        ElementPlus.ElMessage.error(this.t('msg.saveFail'));
+        console.error('saveLedger error:', e);
+        const msg = e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.saveFail');
+        ElementPlus.ElMessage.error(msg);
       }
       this.saving = false;
     },
@@ -2330,26 +2599,30 @@ const app = createApp({
       this.saving = true;
       try {
         const method = this.paymentEditMode ? 'PUT' : 'POST';
-        const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/customer-payment', {
+        const res = await this.fetchWithTimeout('/api/v1/ledgers/' + this.currentLedger.id + '/customer-payment', {
           method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: this.payment.amount,
             collection_date: this.payment.collection_date,
             proof_url: this.payment.proof_url,
           })
-        });
+        }, 30000, 2);
         if (res.ok) {
+          const updated = await res.json();
+          const idx = this.ledgers.findIndex(l => l.id === updated.id);
+          if (idx !== -1) this.ledgers.splice(idx, 1, updated);
           ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.receiveUpdated') : this.t('msg.receiveSuccess'));
           this.clearDraft('payment_' + this.currentLedger.id);
           this.paymentDialogVisible = false;
-          this.loadLedgers();
           this.loadSummary();
+          setTimeout(() => this.loadLedgers(), 100);
         } else {
-          const err = await res.json();
+          const err = await res.json().catch(() => ({}));
           ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error(this.t('msg.networkError'));
+        console.error('saveCustomerPayment error:', e);
+        ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -2403,7 +2676,7 @@ const app = createApp({
       this.saving = true;
       try {
         const method = this.paymentEditMode ? 'PUT' : 'POST';
-        const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/product-payment', {
+        const res = await this.fetchWithTimeout('/api/v1/ledgers/' + this.currentLedger.id + '/product-payment', {
           method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: saveAmount,
@@ -2413,19 +2686,23 @@ const app = createApp({
             product_payment_rate: this.productPayment.product_payment_rate,
             order_details: this.productPayment.order_details || [],
           })
-        });
+        }, 30000, 2);
         if (res.ok) {
+          const updated = await res.json();
+          const idx = this.ledgers.findIndex(l => l.id === updated.id);
+          if (idx !== -1) this.ledgers.splice(idx, 1, updated);
           ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.productPaymentUpdated') : this.t('msg.productPaymentSuccess'));
           this.clearDraft('product_' + this.currentLedger.id);
           this.productPaymentDialogVisible = false;
-          this.loadLedgers();
           this.loadSummary();
+          setTimeout(() => this.loadLedgers(), 100);
         } else {
-          const err = await res.json();
+          const err = await res.json().catch(() => ({}));
           ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error(this.t('msg.networkError'));
+        console.error('saveProductPayment error:', e);
+        ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.networkError'));
       }
       this.saving = false;
     },
@@ -2487,7 +2764,7 @@ const app = createApp({
       this.saving = true;
       try {
         const method = this.paymentEditMode ? 'PUT' : 'POST';
-        const res = await fetch('/api/v1/ledgers/' + this.currentLedger.id + '/commission-payment', {
+        const res = await this.fetchWithTimeout('/api/v1/ledgers/' + this.currentLedger.id + '/commission-payment', {
           method: method, headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             amount: saveAmount,
@@ -2497,19 +2774,23 @@ const app = createApp({
             order_details: this.commissionPayment.order_details || [],
             commission_payment_rate: this.commissionPayment.commission_payment_rate,
           })
-        });
+        }, 30000, 2);
         if (res.ok) {
+          const updated = await res.json();
+          const idx = this.ledgers.findIndex(l => l.id === updated.id);
+          if (idx !== -1) this.ledgers.splice(idx, 1, updated);
           ElementPlus.ElMessage.success(this.paymentEditMode ? this.t('msg.commissionPaymentUpdated') : this.t('msg.commissionPaymentSuccess'));
           this.clearDraft('commission_' + this.currentLedger.id);
           this.commissionPaymentDialogVisible = false;
-          this.loadLedgers();
           this.loadSummary();
+          setTimeout(() => this.loadLedgers(), 100);
         } else {
-          const err = await res.json();
+          const err = await res.json().catch(() => ({}));
           ElementPlus.ElMessage.error(err.error || this.t('msg.operationFail'));
         }
       } catch(e) {
-        ElementPlus.ElMessage.error(this.t('msg.networkError'));
+        console.error('saveCommissionPayment error:', e);
+        ElementPlus.ElMessage.error(e.message === 'timeout' ? this.t('msg.timeout') : this.t('msg.networkError'));
       }
       this.saving = false;
     },
