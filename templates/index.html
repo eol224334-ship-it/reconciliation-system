@@ -653,6 +653,9 @@
                   <el-table-column prop="price" :label="t('orders.price')" width="100" align="right">
                     <template #default="{row}"><span class="amount">{{ fmt(row.price, 2) }}</span></template>
                   </el-table-column>
+                  <el-table-column prop="currency" :label="t('orders.currency')" width="90" align="center">
+                    <template #default="{row}"><span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency || 'MYR' }}</span></template>
+                  </el-table-column>
                   <el-table-column prop="buyer_commission" :label="t('orders.buyerCommission')" width="120" align="right">
                     <template #default="{row}"><span class="amount">{{ fmt(row.buyer_commission, 2) }}</span></template>
                   </el-table-column>
@@ -827,6 +830,11 @@
         </el-form-item>
         <el-form-item :label="t('orders.price')" style="flex:1;">
           <el-input-number v-model="orderDetailForm.price" :min="0" :precision="2" :step="1" style="width:100%" @change="calcOrderTotals"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('orders.currency')" style="flex:1;">
+          <el-select v-model="orderDetailForm.currency" style="width:100%" filterable>
+            <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code" :value="code"></el-option>
+          </el-select>
         </el-form-item>
       </div>
       <div style="display:flex;gap:12px;">
@@ -1232,7 +1240,8 @@ const I18N = {
     'orders.orderNo': '订单号',
     'orders.item': '商品',
     'orders.qty': '数量',
-    'orders.price': '单价(RM)',
+    'orders.price': '单价',
+    'orders.currency': '货币',
     'orders.buyerCommission': '买家佣金',
     'orders.totalPayment': '总付款',
     'orders.totalReceived': '实际到账',
@@ -1484,7 +1493,8 @@ const I18N = {
     'orders.orderNo': 'Order No.',
     'orders.item': 'Item',
     'orders.qty': 'Qty',
-    'orders.price': 'Price(RM)',
+    'orders.price': 'Price',
+    'orders.currency': 'Currency',
     'orders.buyerCommission': 'Buyer Commission',
     'orders.totalPayment': 'Total Payment',
     'orders.totalReceived': 'Total Received',
@@ -1776,7 +1786,7 @@ const app = createApp({
       orderPlatforms: [],
       orderStores: [],
       orderDetailDialog: { visible: false, editing: false },
-      orderDetailForm: { id: null, order_date: '', platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' },
+      orderDetailForm: { id: null, order_date: '', platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, currency: 'MYR', buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' },
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -2160,7 +2170,7 @@ const app = createApp({
         this.orderDetailForm = JSON.parse(JSON.stringify(row));
         this.orderDetailDialog.editing = true;
       } else {
-        this.orderDetailForm = { id: null, order_date: new Date().toISOString().slice(0,10), platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' };
+        this.orderDetailForm = { id: null, order_date: new Date().toISOString().slice(0,10), platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, currency: 'MYR', buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' };
         this.orderDetailDialog.editing = false;
       }
       this.orderDetailDialog.visible = true;

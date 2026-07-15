@@ -293,6 +293,7 @@ def migrate_order_line_items():
                 item TEXT,
                 qty INTEGER NOT NULL DEFAULT 0,
                 price DOUBLE PRECISION NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'MYR',
                 buyer_commission DOUBLE PRECISION NOT NULL DEFAULT 0,
                 total_payment DOUBLE PRECISION NOT NULL DEFAULT 0,
                 total_received DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -306,6 +307,11 @@ def migrate_order_line_items():
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"""
         )
+        # Add currency column if table was created before this migration
+        try:
+            db.execute("ALTER TABLE order_line_items ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'MYR'")
+        except Exception:
+            pass
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_date ON order_line_items(order_date)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_platform ON order_line_items(platform)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_store ON order_line_items(platform_store)")
@@ -1036,9 +1042,9 @@ def create_order_detail():
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cur = db.execute(
         """INSERT INTO order_line_items
-           (order_date, platform, platform_store, order_no, item, qty, price, buyer_commission,
+           (order_date, platform, platform_store, order_no, item, qty, price, currency, buyer_commission,
             total_payment, total_received, fake_order_fee, total_fo_fee, review_commission_rmb, remark, created_at, updated_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING id""",
         (
             data.get('order_date') or now[:10],
@@ -1048,6 +1054,7 @@ def create_order_detail():
             data.get('item', ''),
             qty,
             price,
+            data.get('currency', 'MYR') or 'MYR',
             float(data.get('buyer_commission', 0) or 0),
             total_payment,
             float(data.get('total_received', 0) or 0),
@@ -1082,7 +1089,7 @@ def update_order_detail(item_id):
     db.execute(
         """UPDATE order_line_items SET
            order_date = %s, platform = %s, platform_store = %s, order_no = %s, item = %s,
-           qty = %s, price = %s, buyer_commission = %s, total_payment = %s, total_received = %s,
+           qty = %s, price = %s, currency = %s, buyer_commission = %s, total_payment = %s, total_received = %s,
            fake_order_fee = %s, total_fo_fee = %s, review_commission_rmb = %s, remark = %s, updated_at = %s
            WHERE id = %s""",
         (
@@ -1093,6 +1100,7 @@ def update_order_detail(item_id):
             data.get('item', existing['item']),
             qty,
             price,
+            data.get('currency', existing['currency']) or 'MYR',
             float(data.get('buyer_commission', existing['buyer_commission']) or 0),
             total_payment,
             float(data.get('total_received', existing['total_received']) or 0),
