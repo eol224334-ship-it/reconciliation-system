@@ -320,6 +320,13 @@ def migrate_order_line_items():
         db.close()
 
 
+def row_to_dict(row):
+    """Convert a psycopg2 RealDictRow (or any mapping) to a plain dict."""
+    if row is None:
+        return None
+    return dict(row)
+
+
 def rows_to_dicts(rows):
     return [dict(r) for r in rows]
 
