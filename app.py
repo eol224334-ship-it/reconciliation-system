@@ -179,6 +179,30 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_ledger_currency ON evaluation_expense_ledger(currency)",
         "CREATE INDEX IF NOT EXISTS idx_ledger_created ON evaluation_expense_ledger(created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_audit_record ON audit_log(table_name, record_id)",
+        """CREATE TABLE IF NOT EXISTS order_line_items (
+            id SERIAL PRIMARY KEY,
+            order_date TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            platform_store TEXT NOT NULL,
+            order_no TEXT,
+            item TEXT,
+            qty INTEGER NOT NULL DEFAULT 0,
+            price DOUBLE PRECISION NOT NULL DEFAULT 0,
+            buyer_commission DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_payment DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_received DOUBLE PRECISION NOT NULL DEFAULT 0,
+            fake_order_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_fo_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+            review_commission_rmb DOUBLE PRECISION NOT NULL DEFAULT 0,
+            remark TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_order_line_date ON order_line_items(order_date)",
+        "CREATE INDEX IF NOT EXISTS idx_order_line_platform ON order_line_items(platform)",
+        "CREATE INDEX IF NOT EXISTS idx_order_line_store ON order_line_items(platform_store)",
     ]
     for stmt in statements:
         db.execute(stmt)
@@ -255,7 +279,40 @@ def migrate_db():
     db.close()
 
 
-def row_to_dict(row):
+def migrate_order_line_items():
+    """Ensure order_line_items table exists for the new order detail module."""
+    db = get_db()
+    try:
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS order_line_items (
+                id SERIAL PRIMARY KEY,
+                order_date TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                platform_store TEXT NOT NULL,
+                order_no TEXT,
+                item TEXT,
+                qty INTEGER NOT NULL DEFAULT 0,
+                price DOUBLE PRECISION NOT NULL DEFAULT 0,
+                buyer_commission DOUBLE PRECISION NOT NULL DEFAULT 0,
+                total_payment DOUBLE PRECISION NOT NULL DEFAULT 0,
+                total_received DOUBLE PRECISION NOT NULL DEFAULT 0,
+                fake_order_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+                total_fo_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+                review_commission_rmb DOUBLE PRECISION NOT NULL DEFAULT 0,
+                remark TEXT,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_date ON order_line_items(order_date)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_platform ON order_line_items(platform)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_store ON order_line_items(platform_store)")
+        db.commit()
+    finally:
+        db.close()
+
     return dict(row) if row else None
 
 
@@ -910,6 +967,190 @@ def upload_file():
 
 
 # ============================================================
+# API: Order Line Items (Order Details)
+# ============================================================
+
+@app.route('/api/v1/order-details', methods=['GET'])
+def list_order_details():
+    db = get_db()
+    params = []
+    where = ['is_deleted = 0']
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    platform = request.args.get('platform')
+    platform_store = request.args.get('platform_store')
+    if date_from:
+        where.append('order_date >= %s')
+        params.append(date_from)
+    if date_to:
+        where.append('order_date <= %s')
+        params.append(date_to)
+    if platform:
+        where.append('platform = %s')
+        params.append(platform)
+    if platform_store:
+        where.append('platform_store = %s')
+        params.append(platform_store)
+    sql = 'SELECT * FROM order_line_items WHERE ' + ' AND '.join(where) + ' ORDER BY order_date DESC, id DESC'
+    rows = db.execute(sql, params).fetchall()
+    result = rows_to_dicts(rows)
+    db.close()
+    return jsonify(result)
+
+
+@app.route('/api/v1/order-details/summary', methods=['GET'])
+def order_details_summary():
+    db = get_db()
+    params = []
+    where = ['is_deleted = 0']
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    platform = request.args.get('platform')
+    platform_store = request.args.get('platform_store')
+    if date_from:
+        where.append('order_date >= %s')
+        params.append(date_from)
+    if date_to:
+        where.append('order_date <= %s')
+        params.append(date_to)
+    if platform:
+        where.append('platform = %s')
+        params.append(platform)
+    if platform_store:
+        where.append('platform_store = %s')
+        params.append(platform_store)
+    sql = 'SELECT COUNT(*) AS count, COALESCE(SUM(qty),0) AS total_qty, COALESCE(SUM(total_payment),0) AS total_payment, COALESCE(SUM(total_received),0) AS total_received, COALESCE(SUM(total_fo_fee),0) AS total_fo_fee, COALESCE(SUM(review_commission_rmb),0) AS total_review_commission_rmb FROM order_line_items WHERE ' + ' AND '.join(where)
+    row = db.execute(sql, params).fetchone()
+    summary = row_to_dict(row)
+    db.close()
+    return jsonify(summary)
+
+
+@app.route('/api/v1/order-details', methods=['POST'])
+def create_order_detail():
+    data = request.json
+    db = get_db()
+    qty = int(data.get('qty', 0) or 0)
+    price = float(data.get('price', 0) or 0)
+    fake_order_fee = float(data.get('fake_order_fee', 0) or 0)
+    total_payment = float(data.get('total_payment', qty * price) or 0)
+    total_fo_fee = float(data.get('total_fo_fee', qty * fake_order_fee) or 0)
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cur = db.execute(
+        """INSERT INTO order_line_items
+           (order_date, platform, platform_store, order_no, item, qty, price, buyer_commission,
+            total_payment, total_received, fake_order_fee, total_fo_fee, review_commission_rmb, remark, created_at, updated_at)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           RETURNING id""",
+        (
+            data.get('order_date') or now[:10],
+            data.get('platform', ''),
+            data.get('platform_store', ''),
+            data.get('order_no', ''),
+            data.get('item', ''),
+            qty,
+            price,
+            float(data.get('buyer_commission', 0) or 0),
+            total_payment,
+            float(data.get('total_received', 0) or 0),
+            fake_order_fee,
+            total_fo_fee,
+            float(data.get('review_commission_rmb', 0) or 0),
+            data.get('remark', ''),
+            now, now
+        )
+    )
+    new_id = cur.fetchone()['id']
+    db.commit()
+    row = db.execute('SELECT * FROM order_line_items WHERE id = %s', (new_id,)).fetchone()
+    db.close()
+    return jsonify(row_to_dict(row)), 201
+
+
+@app.route('/api/v1/order-details/<int:item_id>', methods=['PUT'])
+def update_order_detail(item_id):
+    data = request.json
+    db = get_db()
+    existing = db.execute('SELECT * FROM order_line_items WHERE id = %s AND is_deleted = 0', (item_id,)).fetchone()
+    if not existing:
+        db.close()
+        return jsonify({'error': 'Not found'}), 404
+    qty = int(data.get('qty', existing['qty']) or 0)
+    price = float(data.get('price', existing['price']) or 0)
+    fake_order_fee = float(data.get('fake_order_fee', existing['fake_order_fee']) or 0)
+    total_payment = float(data.get('total_payment', qty * price) or 0)
+    total_fo_fee = float(data.get('total_fo_fee', qty * fake_order_fee) or 0)
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    db.execute(
+        """UPDATE order_line_items SET
+           order_date = %s, platform = %s, platform_store = %s, order_no = %s, item = %s,
+           qty = %s, price = %s, buyer_commission = %s, total_payment = %s, total_received = %s,
+           fake_order_fee = %s, total_fo_fee = %s, review_commission_rmb = %s, remark = %s, updated_at = %s
+           WHERE id = %s""",
+        (
+            data.get('order_date', existing['order_date']),
+            data.get('platform', existing['platform']),
+            data.get('platform_store', existing['platform_store']),
+            data.get('order_no', existing['order_no']),
+            data.get('item', existing['item']),
+            qty,
+            price,
+            float(data.get('buyer_commission', existing['buyer_commission']) or 0),
+            total_payment,
+            float(data.get('total_received', existing['total_received']) or 0),
+            fake_order_fee,
+            total_fo_fee,
+            float(data.get('review_commission_rmb', existing['review_commission_rmb']) or 0),
+            data.get('remark', existing['remark']),
+            now, item_id
+        )
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM order_line_items WHERE id = %s', (item_id,)).fetchone()
+    db.close()
+    return jsonify(row_to_dict(row))
+
+
+@app.route('/api/v1/order-details/<int:item_id>', methods=['DELETE'])
+def delete_order_detail(item_id):
+    db = get_db()
+    existing = db.execute('SELECT * FROM order_line_items WHERE id = %s AND is_deleted = 0', (item_id,)).fetchone()
+    if not existing:
+        db.close()
+        return jsonify({'error': 'Not found'}), 404
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    db.execute('UPDATE order_line_items SET is_deleted = 1, deleted_at = %s WHERE id = %s', (now, item_id))
+    db.commit()
+    db.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/v1/order-details/platforms', methods=['GET'])
+def list_platforms():
+    db = get_db()
+    rows = db.execute("SELECT DISTINCT platform FROM order_line_items WHERE is_deleted = 0 AND platform IS NOT NULL AND platform != '' ORDER BY platform").fetchall()
+    platforms = [r['platform'] for r in rows]
+    db.close()
+    return jsonify(platforms)
+
+
+@app.route('/api/v1/order-details/stores', methods=['GET'])
+def list_stores():
+    db = get_db()
+    platform = request.args.get('platform')
+    params = []
+    where = ['is_deleted = 0 AND platform_store IS NOT NULL AND platform_store != \'\'']
+    if platform:
+        where.append('platform = %s')
+        params.append(platform)
+    sql = 'SELECT DISTINCT platform_store FROM order_line_items WHERE ' + ' AND '.join(where) + ' ORDER BY platform_store'
+    rows = db.execute(sql, params).fetchall()
+    stores = [r['platform_store'] for r in rows]
+    db.close()
+    return jsonify(stores)
+
+
+# ============================================================
 # API: Dashboard
 # ============================================================
 
@@ -1138,6 +1379,7 @@ def serve_upload(filename):
 # ============================================================
 init_db()
 migrate_db()
+migrate_order_line_items()
 print("=" * 50)
 print("  Review Reconciliation System v3.1 (PostgreSQL)")
 print("  Database: Supabase PostgreSQL")

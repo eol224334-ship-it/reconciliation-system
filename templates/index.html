@@ -255,6 +255,9 @@
         <div class="sidebar-item" :class="{active: tab==='ledgers'}" @click="switchTab('ledgers')">
           <i class="fas fa-table-list"></i><span>{{ t('nav.ledgers') }}</span>
         </div>
+        <div class="sidebar-item" :class="{active: tab==='orders'}" @click="switchTab('orders')">
+          <i class="fas fa-clipboard-list"></i><span>{{ t('nav.orders') }}</span>
+        </div>
         <div class="sidebar-item" :class="{active: tab==='audit'}" @click="switchTab('audit')">
           <i class="fas fa-shield-halved"></i><span>{{ t('nav.audit') }}</span>
         </div>
@@ -589,6 +592,98 @@
           </div>
         </div>
 
+        <!-- ==================== Order Details ==================== -->
+        <div v-else-if="tab==='orders'" key="orders">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fas fa-clipboard-list" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('orders.title') }}</h3>
+              <el-button type="primary" @click="openOrderDetail()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('btn.newOrder') }}</el-button>
+            </div>
+            <div class="card-body">
+              <div class="filter-bar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+                <el-date-picker v-model="orderFilter.dateRange" type="daterange" value-format="YYYY-MM-DD" :start-placeholder="t('orders.dateFrom')" :end-placeholder="t('orders.dateTo')" style="width:260px;"></el-date-picker>
+                <el-select v-model="orderFilter.platform" filterable clearable :placeholder="t('orders.platform')" style="width:160px;" @change="onOrderPlatformChange">
+                  <el-option v-for="p in orderPlatforms" :key="p" :label="p" :value="p"></el-option>
+                </el-select>
+                <el-select v-model="orderFilter.platform_store" filterable clearable :placeholder="t('orders.platformStore')" style="width:180px;">
+                  <el-option v-for="s in orderStores" :key="s" :label="s" :value="s"></el-option>
+                </el-select>
+                <el-button type="primary" @click="loadOrderDetails"><i class="fas fa-filter" style="margin-right:4px;"></i>{{ t('btn.filter') }}</el-button>
+                <el-button @click="resetOrderFilter"><i class="fas fa-rotate-left" style="margin-right:4px;"></i>{{ t('btn.reset') }}</el-button>
+              </div>
+
+              <div class="summary-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+                <div class="summary-card" style="background:#f0f9ff;border:1px solid #bae0ff;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.count') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#1677ff;">{{ orderSummary.count }}</div>
+                </div>
+                <div class="summary-card" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalQty') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#52c41a;">{{ fmt(orderSummary.total_qty, 0) }}</div>
+                </div>
+                <div class="summary-card" style="background:#fff7e6;border:1px solid #ffd591;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalPayment') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#fa8c16;">{{ fmt(orderSummary.total_payment) }}</div>
+                </div>
+                <div class="summary-card" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalReceived') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#52c41a;">{{ fmt(orderSummary.total_received) }}</div>
+                </div>
+                <div class="summary-card" style="background:#fff0f6;border:1px solid #ffadd2;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalFoFee') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#eb2f96;">{{ fmt(orderSummary.total_fo_fee) }}</div>
+                </div>
+                <div class="summary-card" style="background:#f9f0ff;border:1px solid #d3adf7;border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;color:#6b7280;">{{ t('orders.totalReviewCommission') }}</div>
+                  <div style="font-size:20px;font-weight:700;color:#722ed1;">{{ fmt(orderSummary.total_review_commission_rmb) }}</div>
+                </div>
+              </div>
+
+              <div class="table-wrap">
+                <el-table :data="orderDetails" stripe style="width:100%" v-loading="loading" max-height="620"
+                  :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
+                  :empty-text="t('orders.empty')">
+                  <el-table-column type="index" width="45" label="#"></el-table-column>
+                  <el-table-column prop="order_date" :label="t('orders.date')" width="110" sortable></el-table-column>
+                  <el-table-column prop="platform" :label="t('orders.platform')" width="110"></el-table-column>
+                  <el-table-column prop="platform_store" :label="t('orders.platformStore')" width="140" show-overflow-tooltip></el-table-column>
+                  <el-table-column prop="order_no" :label="t('orders.orderNo')" width="130" show-overflow-tooltip></el-table-column>
+                  <el-table-column prop="item" :label="t('orders.item')" min-width="160" show-overflow-tooltip></el-table-column>
+                  <el-table-column prop="qty" :label="t('orders.qty')" width="70" align="right"></el-table-column>
+                  <el-table-column prop="price" :label="t('orders.price')" width="100" align="right">
+                    <template #default="{row}"><span class="amount">{{ fmt(row.price, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="buyer_commission" :label="t('orders.buyerCommission')" width="120" align="right">
+                    <template #default="{row}"><span class="amount">{{ fmt(row.buyer_commission, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="total_payment" :label="t('orders.totalPayment')" width="120" align="right">
+                    <template #default="{row}"><span class="amount total">{{ fmt(row.total_payment, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="total_received" :label="t('orders.totalReceived')" width="120" align="right">
+                    <template #default="{row}"><span class="amount pos">{{ fmt(row.total_received, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="fake_order_fee" :label="t('orders.fakeOrderFee')" width="110" align="right">
+                    <template #default="{row}"><span class="amount">{{ fmt(row.fake_order_fee, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="total_fo_fee" :label="t('orders.totalFoFee')" width="120" align="right">
+                    <template #default="{row}"><span class="amount" style="color:var(--color-danger);">{{ fmt(row.total_fo_fee, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="review_commission_rmb" :label="t('orders.reviewCommissionRmb')" width="130" align="right">
+                    <template #default="{row}"><span class="amount purple">{{ fmt(row.review_commission_rmb, 2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column prop="remark" :label="t('col.remark')" min-width="120" show-overflow-tooltip></el-table-column>
+                  <el-table-column :label="t('col.actions')" width="120" fixed="right">
+                    <template #default="{row}">
+                      <el-button size="small" text @click="openOrderDetail(row)"><i class="fas fa-pen"></i></el-button>
+                      <el-button size="small" type="danger" text @click="deleteOrderDetail(row)"><i class="fas fa-trash"></i></el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-else-if="tab==='audit'" key="audit">
           <div class="card">
             <div class="card-header">
@@ -699,6 +794,76 @@
       </div>
     </div>
   </div>
+
+  <!-- ==================== Order Detail Dialog ==================== -->
+  <el-dialog :title="orderDetailDialog.editing ? t('dialog.editOrder') : t('dialog.newOrder')" v-model="orderDetailDialog.visible" width="620px" :close-on-click-modal="false">
+    <el-form :model="orderDetailForm" label-width="120px">
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.date')" required style="flex:1;">
+          <el-date-picker v-model="orderDetailForm.order_date" type="date" value-format="YYYY-MM-DD" style="width:100%;"></el-date-picker>
+        </el-form-item>
+        <el-form-item :label="t('orders.platform')" required style="flex:1;">
+          <el-select v-model="orderDetailForm.platform" filterable allow-create default-first-option :placeholder="t('orders.platform')" style="width:100%;">
+            <el-option v-for="p in orderPlatforms" :key="p" :label="p" :value="p"></el-option>
+          </el-select>
+        </el-form-item>
+      </div>
+      <el-form-item :label="t('orders.platformStore')" required>
+        <el-select v-model="orderDetailForm.platform_store" filterable allow-create default-first-option :placeholder="t('orders.platformStore')" style="width:100%;">
+          <el-option v-for="s in orderStores" :key="s" :label="s" :value="s"></el-option>
+        </el-select>
+      </el-form-item>
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.orderNo')" style="flex:1;">
+          <el-input v-model="orderDetailForm.order_no" :placeholder="t('orders.orderNo')"></el-input>
+        </el-form-item>
+        <el-form-item :label="t('orders.item')" style="flex:1;">
+          <el-input v-model="orderDetailForm.item" :placeholder="t('orders.item')"></el-input>
+        </el-form-item>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.qty')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.qty" :min="0" :precision="0" :step="1" style="width:100%" @change="calcOrderTotals"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('orders.price')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.price" :min="0" :precision="2" :step="1" style="width:100%" @change="calcOrderTotals"></el-input-number>
+        </el-form-item>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.buyerCommission')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.buyer_commission" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('orders.totalPayment')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.total_payment" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+        </el-form-item>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.totalReceived')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.total_received" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('orders.fakeOrderFee')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.fake_order_fee" :min="0" :precision="2" :step="1" style="width:100%" @change="calcOrderTotals"></el-input-number>
+        </el-form-item>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <el-form-item :label="t('orders.totalFoFee')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.total_fo_fee" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('orders.reviewCommissionRmb')" style="flex:1;">
+          <el-input-number v-model="orderDetailForm.review_commission_rmb" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+        </el-form-item>
+      </div>
+      <el-form-item :label="t('col.remark')">
+        <el-input v-model="orderDetailForm.remark" type="textarea" :rows="2" :placeholder="t('form.remarkPlaceholder')"></el-input>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="orderDetailDialog.visible = false">{{ t('btn.cancel') }}</el-button>
+        <el-button type="primary" @click="saveOrderDetail" :loading="saving">{{ t('btn.save') }}</el-button>
+      </span>
+    </template>
+  </el-dialog>
 
   <!-- ==================== Create/Edit Dialog ==================== -->
   <el-dialog :title="editing ? t('dialog.editRecord') : t('dialog.newRecord')" v-model="dialogVisible" width="680px" :close-on-click-modal="false">
@@ -1037,6 +1202,7 @@ const I18N = {
     'app.title': '测评对账系统',
     'nav.dashboard': '财务看板',
     'nav.ledgers': '对账流水',
+    'nav.orders': '订单明细',
     'nav.audit': '审计日志',
     'nav.settings': '系统设置',
     'btn.refresh': '刷新',
@@ -1058,6 +1224,33 @@ const I18N = {
     'btn.newRecord': '新增流水',
     'btn.viewDetails': '查看明细',
     'btn.feishuSettings': '飞书设置',
+    'btn.newOrder': '新增订单',
+    'orders.title': '订单明细',
+    'orders.date': '日期',
+    'orders.platform': '平台',
+    'orders.platformStore': '店铺',
+    'orders.orderNo': '订单号',
+    'orders.item': '商品',
+    'orders.qty': '数量',
+    'orders.price': '单价(RM)',
+    'orders.buyerCommission': '买家佣金',
+    'orders.totalPayment': '总付款',
+    'orders.totalReceived': '实际到账',
+    'orders.fakeOrderFee': '刷单费',
+    'orders.totalFoFee': 'FO总费用',
+    'orders.reviewCommissionRmb': '测评佣金(RMB)',
+    'orders.dateFrom': '开始日期',
+    'orders.dateTo': '结束日期',
+    'orders.count': '订单数',
+    'orders.totalQty': '总数量',
+    'orders.empty': '暂无订单数据，点击右上角「新增订单」开始录入',
+    'dialog.newOrder': '新增订单',
+    'dialog.editOrder': '编辑订单',
+    'msg.saveOrderSuccess': '订单保存成功',
+    'msg.saveOrderFail': '订单保存失败',
+    'msg.deleteOrderSuccess': '订单已删除',
+    'msg.deleteOrderFail': '订单删除失败',
+    'msg.loadOrderDetailsFail': '加载订单明细失败',
     'status.ar.pending': '待核销',
     'status.ar.partial': '部分收款',
     'status.ar.settled': '已清算',
@@ -1156,6 +1349,7 @@ const I18N = {
     'settings.event5': '- 手动推送汇总 -> 蓝色卡片通知（含各币种统计）',
     'dialog.editRecord': '编辑流水',
     'dialog.newRecord': '新增流水',
+    'dialog.confirm': '请确认',
     'form.customerName': '店铺名称',
     'form.companyName': '公司名称',
     'form.currency': '交易币种',
@@ -1222,6 +1416,7 @@ const I18N = {
     'msg.loadAuditFail': '加载审计日志失败',
     'msg.autoFillRate': '已自动填充',
     'msg.fillCustomerName': '请填写客户名称',
+    'msg.fillRequired': '请填写必填项',
     'msg.modifySuccess': '修改成功',
     'msg.createSuccess': '创建成功',
     'msg.saveFail': '保存失败',
@@ -1259,6 +1454,7 @@ const I18N = {
     'app.title': 'Review & Reconciliation',
     'nav.dashboard': 'Dashboard',
     'nav.ledgers': 'Ledgers',
+    'nav.orders': 'Order Details',
     'nav.audit': 'Audit Log',
     'nav.settings': 'Settings',
     'btn.refresh': 'Refresh',
@@ -1280,6 +1476,33 @@ const I18N = {
     'btn.newRecord': 'New Record',
     'btn.viewDetails': 'View Details',
     'btn.feishuSettings': 'Feishu Settings',
+    'btn.newOrder': 'New Order',
+    'orders.title': 'Order Details',
+    'orders.date': 'Date',
+    'orders.platform': 'Platform',
+    'orders.platformStore': 'Store',
+    'orders.orderNo': 'Order No.',
+    'orders.item': 'Item',
+    'orders.qty': 'Qty',
+    'orders.price': 'Price(RM)',
+    'orders.buyerCommission': 'Buyer Commission',
+    'orders.totalPayment': 'Total Payment',
+    'orders.totalReceived': 'Total Received',
+    'orders.fakeOrderFee': 'Fake Order Fee',
+    'orders.totalFoFee': 'Total FO Fee',
+    'orders.reviewCommissionRmb': 'Review Commission(RMB)',
+    'orders.dateFrom': 'Start Date',
+    'orders.dateTo': 'End Date',
+    'orders.count': 'Orders',
+    'orders.totalQty': 'Total Qty',
+    'orders.empty': 'No order data yet. Click "New Order" to start.',
+    'dialog.newOrder': 'New Order',
+    'dialog.editOrder': 'Edit Order',
+    'msg.saveOrderSuccess': 'Order saved successfully',
+    'msg.saveOrderFail': 'Failed to save order',
+    'msg.deleteOrderSuccess': 'Order deleted',
+    'msg.deleteOrderFail': 'Failed to delete order',
+    'msg.loadOrderDetailsFail': 'Failed to load order details',
     'status.ar.pending': 'Pending',
     'status.ar.partial': 'Partial',
     'status.ar.settled': 'Settled',
@@ -1378,6 +1601,7 @@ const I18N = {
     'settings.event5': '- Manual summary push -> Blue card notification (with currency stats)',
     'dialog.editRecord': 'Edit Record',
     'dialog.newRecord': 'New Record',
+    'dialog.confirm': 'Confirm',
     'form.customerName': 'Store Name',
     'form.companyName': 'Company Name',
     'form.currency': 'Currency',
@@ -1444,6 +1668,7 @@ const I18N = {
     'msg.loadAuditFail': 'Failed to load audit logs',
     'msg.autoFillRate': 'Auto-filled',
     'msg.fillCustomerName': 'Please fill in customer name',
+    'msg.fillRequired': 'Please fill in required fields',
     'msg.modifySuccess': 'Modified successfully',
     'msg.createSuccess': 'Created successfully',
     'msg.saveFail': 'Save failed',
@@ -1544,6 +1769,14 @@ const app = createApp({
       orderDetailsCustomer: '',
 
       feishuConfig: { feishu_webhook_url: '', feishu_webhook_secret: '', feishu_enabled: false },
+
+      orderDetails: [],
+      orderFilter: { dateRange: [], platform: '', platform_store: '' },
+      orderSummary: { count: 0, total_qty: 0, total_payment: 0, total_received: 0, total_fo_fee: 0, total_review_commission_rmb: 0 },
+      orderPlatforms: [],
+      orderStores: [],
+      orderDetailDialog: { visible: false, editing: false },
+      orderDetailForm: { id: null, order_date: '', platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' },
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -1685,6 +1918,7 @@ const app = createApp({
       this.sidebarOpen = false;
       if (t === 'dashboard') this.loadSummary();
       if (t === 'ledgers') this.loadLedgers();
+      if (t === 'orders') this.loadOrderDetails();
       if (t === 'audit') this.loadAuditLogs();
       if (t === 'settings') this.loadSettings();
     },
@@ -1855,6 +2089,127 @@ const app = createApp({
       } catch(e) {
         console.error('loadAuditLogs error:', e);
         ElementPlus.ElMessage.error(this.t('msg.loadAuditFail'));
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadOrderDetails() {
+      this.loading = true;
+      try {
+        const params = new URLSearchParams();
+        if (this.orderFilter.dateRange && this.orderFilter.dateRange.length === 2) {
+          params.append('date_from', this.orderFilter.dateRange[0]);
+          params.append('date_to', this.orderFilter.dateRange[1]);
+        }
+        if (this.orderFilter.platform) params.append('platform', this.orderFilter.platform);
+        if (this.orderFilter.platform_store) params.append('platform_store', this.orderFilter.platform_store);
+        const res = await this.fetchWithTimeout('/api/v1/order-details?' + params.toString(), {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.orderDetails = await res.json();
+        await this.loadOrderSummary();
+        await this.loadOrderPlatforms();
+        await this.loadOrderStores();
+      } catch(e) {
+        console.error('loadOrderDetails error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.loadOrderDetailsFail'));
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loadOrderSummary() {
+      const params = new URLSearchParams();
+      if (this.orderFilter.dateRange && this.orderFilter.dateRange.length === 2) {
+        params.append('date_from', this.orderFilter.dateRange[0]);
+        params.append('date_to', this.orderFilter.dateRange[1]);
+      }
+      if (this.orderFilter.platform) params.append('platform', this.orderFilter.platform);
+      if (this.orderFilter.platform_store) params.append('platform_store', this.orderFilter.platform_store);
+      try {
+        const res = await this.fetchWithTimeout('/api/v1/order-details/summary?' + params.toString(), {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.orderSummary = await res.json();
+      } catch(e) { console.error('loadOrderSummary error:', e); }
+    },
+    async loadOrderPlatforms() {
+      try {
+        const res = await this.fetchWithTimeout('/api/v1/order-details/platforms', {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.orderPlatforms = await res.json();
+      } catch(e) { console.error('loadOrderPlatforms error:', e); }
+    },
+    async loadOrderStores() {
+      const params = new URLSearchParams();
+      if (this.orderFilter.platform) params.append('platform', this.orderFilter.platform);
+      try {
+        const res = await this.fetchWithTimeout('/api/v1/order-details/stores?' + params.toString(), {}, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.orderStores = await res.json();
+      } catch(e) { console.error('loadOrderStores error:', e); }
+    },
+    onOrderPlatformChange() {
+      this.orderFilter.platform_store = '';
+      this.loadOrderStores();
+    },
+    resetOrderFilter() {
+      this.orderFilter = { dateRange: [], platform: '', platform_store: '' };
+      this.loadOrderDetails();
+    },
+    openOrderDetail(row) {
+      if (row && row.id) {
+        this.orderDetailForm = JSON.parse(JSON.stringify(row));
+        this.orderDetailDialog.editing = true;
+      } else {
+        this.orderDetailForm = { id: null, order_date: new Date().toISOString().slice(0,10), platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' };
+        this.orderDetailDialog.editing = false;
+      }
+      this.orderDetailDialog.visible = true;
+    },
+    calcOrderTotals() {
+      const qty = Number(this.orderDetailForm.qty) || 0;
+      const price = Number(this.orderDetailForm.price) || 0;
+      const fakeOrderFee = Number(this.orderDetailForm.fake_order_fee) || 0;
+      this.orderDetailForm.total_payment = parseFloat((qty * price).toFixed(2));
+      this.orderDetailForm.total_fo_fee = parseFloat((qty * fakeOrderFee).toFixed(2));
+    },
+    async saveOrderDetail() {
+      if (!this.orderDetailForm.order_date || !this.orderDetailForm.platform || !this.orderDetailForm.platform_store) {
+        ElementPlus.ElMessage.warning(this.t('msg.fillRequired'));
+        return;
+      }
+      this.saving = true;
+      try {
+        const method = this.orderDetailDialog.editing ? 'PUT' : 'POST';
+        const url = this.orderDetailDialog.editing ? '/api/v1/order-details/' + this.orderDetailForm.id : '/api/v1/order-details';
+        const res = await this.fetchWithTimeout(url, {
+          method: method, headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(this.orderDetailForm)
+        }, 30000);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        ElementPlus.ElMessage.success(this.t('msg.saveOrderSuccess'));
+        this.orderDetailDialog.visible = false;
+        this.loadOrderDetails();
+      } catch(e) {
+        console.error('saveOrderDetail error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.saveOrderFail'));
+      } finally {
+        this.saving = false;
+      }
+    },
+    async deleteOrderDetail(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('msg.confirmDelete'), this.t('dialog.confirm'), { type: 'warning' });
+      } catch(e) { return; }
+      this.loading = true;
+      try {
+        const res = await this.fetchWithTimeout('/api/v1/order-details/' + row.id, { method: 'DELETE' }, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        ElementPlus.ElMessage.success(this.t('msg.deleteOrderSuccess'));
+        this.loadOrderDetails();
+      } catch(e) {
+        console.error('deleteOrderDetail error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.deleteOrderFail'));
       } finally {
         this.loading = false;
       }
