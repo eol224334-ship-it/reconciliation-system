@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>测评对账系统</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.6/dist/index.css">
   <link rel="stylesheet" href="https://unpkg.com/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
@@ -284,7 +287,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.3.2 | Excel Date Import Fix</div>
+        <div>v3.3.3 | Timezone-safe Excel Date Import</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -2306,7 +2309,7 @@ const app = createApp({
       reader.onload = (ev) => {
         try {
           const data = new Uint8Array(ev.target.result);
-          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          const workbook = XLSX.read(data, { type: 'array' });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
           this.parseOrderExcelRows(json);
@@ -2364,14 +2367,14 @@ const app = createApp({
       };
       const parseDate = (v) => {
         const pad = (n) => String(n).padStart(2, '0');
-        const formatLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-        if (!v) return formatLocal(new Date());
-        if (v instanceof Date) return formatLocal(v);
+        const formatUTC = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+        if (!v) return formatUTC(new Date());
+        if (v instanceof Date) return formatUTC(v);
         if (typeof v === 'number') {
-          // Excel serial date; epoch 1899-12-30 in local timezone
-          const epoch = new Date(1899, 11, 30);
-          const d = new Date(epoch.getTime() + v * 86400000);
-          return formatLocal(d);
+          // Excel serial date; use UTC epoch to avoid timezone shift
+          const epoch = Date.UTC(1899, 11, 30);
+          const d = new Date(epoch + v * 86400000);
+          return formatUTC(d);
         }
         const s = String(v).trim();
         if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) {
@@ -2383,7 +2386,7 @@ const app = createApp({
           return `${c}-${pad(a)}-${pad(b)}`;
         }
         const d = new Date(s);
-        if (!isNaN(d.getTime())) return formatLocal(d);
+        if (!isNaN(d.getTime())) return formatUTC(d);
         return s;
       };
       const parsed = [];
