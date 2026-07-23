@@ -9,9 +9,29 @@ import hmac
 import hashlib
 import base64
 import urllib.request
+import re
+import tempfile
 from datetime import datetime, date
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
+
+# Optional AI / document parsing dependencies (gracefully degrade if missing)
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+try:
+    from docx import Document as DocxDocument
+except Exception:
+    DocxDocument = None
+try:
+    import PyPDF2
+except Exception:
+    PyPDF2 = None
+try:
+    import openpyxl
+except Exception:
+    openpyxl = None
 
 app = Flask(__name__)
 CORS(app)
@@ -46,6 +66,41 @@ CURRENCIES = {
     'PLN': {'name': '波兰兹罗提', 'symbol': 'zl'},
     'INR': {'name': '印度卢比', 'symbol': '\u20b9'},
 }
+
+
+# ============================================================
+# AI Configuration (DeepSeek by default, OpenAI-compatible)
+# ============================================================
+
+AI_API_KEY = os.environ.get('AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('OPENAI_API_KEY')
+AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://api.deepseek.com')
+AI_CHAT_MODEL = os.environ.get('AI_CHAT_MODEL', 'deepseek-chat')
+AI_MAX_TOKENS = int(os.environ.get('AI_MAX_TOKENS', '2048'))
+
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+    if not OpenAI:
+        raise RuntimeError('openai package is not installed')
+    if not AI_API_KEY:
+        raise RuntimeError('AI_API_KEY / DEEPSEEK_API_KEY / OPENAI_API_KEY environment variable not set')
+    _openai_client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
+    return _openai_client
+
+
+def ai_chat(messages, temperature=0.7):
+    """Call the configured OpenAI-compatible chat model."""
+    client = get_openai_client()
+    resp = client.chat.completions.create(
+        model=AI_CHAT_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=AI_MAX_TOKENS,
+    )
+    return resp.choices[0].message.content
 
 
 # ============================================================
@@ -203,6 +258,29 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_order_line_date ON order_line_items(order_date)",
         "CREATE INDEX IF NOT EXISTS idx_order_line_platform ON order_line_items(platform)",
         "CREATE INDEX IF NOT EXISTS idx_order_line_store ON order_line_items(platform_store)",
+        # AI Knowledge Base
+        """CREATE TABLE IF NOT EXISTS kb_documents (
+            id SERIAL PRIMARY KEY,
+            title TEXT NOT NULL,
+            doc_type TEXT NOT NULL DEFAULT 'text',
+            content TEXT NOT NULL DEFAULT '',
+            file_path TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS kb_chunks (
+            id SERIAL PRIMARY KEY,
+            document_id INTEGER NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+            chunk_index INTEGER NOT NULL DEFAULT 0,
+            content TEXT NOT NULL,
+            search_vector tsvector,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_kb_chunks_document ON kb_chunks(document_id)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_chunks_search ON kb_chunks USING GIN(search_vector)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_documents_deleted ON kb_documents(is_deleted)",
     ]
     for stmt in statements:
         db.execute(stmt)
@@ -1373,6 +1451,297 @@ def push_summary():
 
 
 # ============================================================
+# AI Knowledge Base & Review Generator
+# ============================================================
+
+ALLOWED_KB_EXTENSIONS = {'txt', 'md', 'pdf', 'docx', 'doc', 'xlsx', 'xls', 'csv'}
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 100
+
+
+def _allowed_kb_filename(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_KB_EXTENSIONS
+
+
+def _extract_text_from_file(filepath, original_filename):
+    ext = original_filename.rsplit('.', 1)[-1].lower()
+    text = ''
+    if ext == 'txt' or ext == 'md' or ext == 'csv':
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            text = f.read()
+    elif ext == 'pdf' and PyPDF2:
+        with open(filepath, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() or ''
+                text += '\n'
+    elif ext in ('docx', 'doc') and DocxDocument:
+        doc = DocxDocument(filepath)
+        text = '\n'.join(p.text for p in doc.paragraphs if p.text)
+    elif ext in ('xlsx', 'xls') and openpyxl:
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        parts = []
+        for sheet in wb.worksheets:
+            rows = []
+            for row in sheet.iter_rows(values_only=True):
+                rows.append('\t'.join(str(cell) if cell is not None else '' for cell in row))
+            parts.append(f'[Sheet: {sheet.title}]\n' + '\n'.join(rows))
+        text = '\n\n'.join(parts)
+    return text.strip()
+
+
+def _chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    """Split text into overlapping chunks by paragraphs / sentences."""
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return []
+    # Try split by paragraphs first
+    parts = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+    if len(parts) <= 1:
+        # Split by sentences
+        parts = [s.strip() for s in re.split(r'(?<=[。！？.!?])\s+', text) if s.strip()]
+    chunks = []
+    current = ''
+    for part in parts:
+        if len(current) + len(part) + 1 > size and current:
+            chunks.append(current.strip())
+            current = current[-overlap:] if overlap < len(current) else ''
+        current = (current + '\n\n' + part).strip() if current else part
+    if current:
+        chunks.append(current.strip())
+    return chunks if chunks else [text[:size]]
+
+
+def _index_document(db, doc_id, content):
+    """Split content into chunks and store with full-text search vector."""
+    db.execute('DELETE FROM kb_chunks WHERE document_id = %s', (doc_id,))
+    chunks = _chunk_text(content)
+    for idx, chunk in enumerate(chunks):
+        db.execute(
+            "INSERT INTO kb_chunks (document_id, chunk_index, content, search_vector) VALUES (%s, %s, %s, to_tsvector('simple', %s))",
+            (doc_id, idx, chunk, chunk)
+        )
+    db.execute(
+        'UPDATE kb_documents SET content = %s, updated_at = %s WHERE id = %s',
+        (content, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), doc_id)
+    )
+
+
+def _search_kb(db, query, product_model=None, top_k=5):
+    """Full-text search over knowledge base chunks."""
+    if not query:
+        return []
+    search_terms = query.strip()
+    if product_model:
+        search_terms = f"{product_model} {search_terms}"
+    # Use plainto_tsquery for safe parsing
+    rows = db.execute(
+        """SELECT c.id, c.document_id, c.chunk_index, c.content,
+                  ts_rank_cd(c.search_vector, plainto_tsquery('simple', %s), 32) AS rank
+           FROM kb_chunks c
+           JOIN kb_documents d ON d.id = c.document_id
+           WHERE d.is_deleted = 0
+             AND c.search_vector @@ plainto_tsquery('simple', %s)
+           ORDER BY rank DESC
+           LIMIT %s""",
+        (search_terms, search_terms, top_k)
+    ).fetchall()
+    return rows_to_dicts(rows)
+
+
+def _format_kb_context(chunks):
+    if not chunks:
+        return ''
+    parts = []
+    for i, ch in enumerate(chunks, 1):
+        parts.append(f"[片段 {i}]\n{ch['content']}")
+    return '\n\n'.join(parts)
+
+
+@app.route('/api/v1/kb/documents', methods=['GET'])
+def list_kb_documents():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, title, doc_type, content, created_at, updated_at FROM kb_documents WHERE is_deleted = 0 ORDER BY updated_at DESC"
+    ).fetchall()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route('/api/v1/kb/documents', methods=['POST'])
+def create_kb_document():
+    db = get_db()
+    title = request.form.get('title', '').strip()
+    doc_type = request.form.get('doc_type', 'text').strip()
+    content = request.form.get('content', '').strip()
+    file = request.files.get('file')
+
+    if not title:
+        return jsonify({'error': 'Title is required'}), 400
+
+    file_path = None
+    if file and file.filename:
+        if not _allowed_kb_filename(file.filename):
+            return jsonify({'error': 'Unsupported file type'}), 400
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        unique_name = f"kb_{uuid.uuid4().hex}.{ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_name)
+        file.save(file_path)
+        doc_type = ext if ext in ALLOWED_KB_EXTENSIONS else 'text'
+        try:
+            content = _extract_text_from_file(file_path, file.filename)
+        except Exception as e:
+            return jsonify({'error': f'Failed to extract file content: {str(e)}'}), 500
+
+    if not content:
+        return jsonify({'error': 'Content is required'}), 400
+
+    db.execute(
+        "INSERT INTO kb_documents (title, doc_type, content, file_path) VALUES (%s, %s, %s, %s) RETURNING id",
+        (title, doc_type, content, file_path)
+    )
+    doc_id = db.cur.fetchone()['id']
+    _index_document(db, doc_id, content)
+    db.commit()
+    db.close()
+    return jsonify({'id': doc_id, 'title': title, 'message': 'Document uploaded successfully'})
+
+
+@app.route('/api/v1/kb/documents/<int:doc_id>', methods=['PUT'])
+def update_kb_document(doc_id):
+    db = get_db()
+    data = request.get_json() or {}
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+    if not title or not content:
+        return jsonify({'error': 'Title and content are required'}), 400
+    db.execute(
+        'UPDATE kb_documents SET title = %s, content = %s, updated_at = %s WHERE id = %s AND is_deleted = 0',
+        (title, content, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), doc_id)
+    )
+    _index_document(db, doc_id, content)
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Document updated'})
+
+
+@app.route('/api/v1/kb/documents/<int:doc_id>', methods=['DELETE'])
+def delete_kb_document(doc_id):
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    db.execute(
+        'UPDATE kb_documents SET is_deleted = 1, deleted_at = %s WHERE id = %s',
+        (now, doc_id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'Document deleted'})
+
+
+@app.route('/api/v1/kb/search', methods=['POST'])
+def search_kb():
+    data = request.get_json() or {}
+    query = data.get('query', '').strip()
+    product_model = data.get('product_model', '').strip()
+    top_k = min(int(data.get('top_k', 5)), 10)
+    db = get_db()
+    rows = _search_kb(db, query, product_model, top_k)
+    db.close()
+    return jsonify(rows)
+
+
+@app.route('/api/v1/ai/chat', methods=['POST'])
+def ai_chat_endpoint():
+    data = request.get_json() or {}
+    product_model = data.get('product_model', '').strip()
+    question = data.get('question', '').strip()
+    if not question:
+        return jsonify({'error': 'Question is required'}), 400
+
+    if not AI_API_KEY:
+        return jsonify({'error': 'AI API Key is not configured. Please set DEEPSEEK_API_KEY or OPENAI_API_KEY environment variable.'}), 503
+
+    db = get_db()
+    try:
+        chunks = _search_kb(db, question, product_model, top_k=5)
+        context = _format_kb_context(chunks)
+
+        system_prompt = (
+            "你是一个专业的产品知识库助手。请根据下面提供的产品知识片段，回答用户关于产品的问题。"
+            "如果知识片段中没有足够信息，请明确说明。回答要简洁、专业、分点清晰。"
+        )
+        user_prompt = f"产品型号：{product_model}\n\n"
+        if context:
+            user_prompt += f"参考资料：\n{context}\n\n"
+        user_prompt += f"问题：{question}"
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        answer = ai_chat(messages, temperature=0.5)
+        return jsonify({'answer': answer, 'chunks_used': len(chunks)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/ai/generate-review', methods=['POST'])
+def generate_review_endpoint():
+    data = request.get_json() or {}
+    competitor_review = data.get('competitor_review', '').strip()
+    selling_points = data.get('selling_points', '').strip()
+    product_model = data.get('product_model', '').strip()
+    count = min(int(data.get('count', 3)), 10)
+    tone = data.get('tone', 'positive').strip()
+
+    if not competitor_review or not selling_points:
+        return jsonify({'error': 'Competitor review and selling points are required'}), 400
+
+    if not AI_API_KEY:
+        return jsonify({'error': 'AI API Key is not configured. Please set DEEPSEEK_API_KEY or OPENAI_API_KEY environment variable.'}), 503
+
+    db = get_db()
+    try:
+        extra_context = ''
+        if product_model:
+            chunks = _search_kb(db, selling_points, product_model, top_k=3)
+            if chunks:
+                extra_context = "\n\n产品知识库参考：\n" + _format_kb_context(chunks)
+
+        system_prompt = (
+            "你是一位资深的跨境电商文案专员。请根据用户提供的竞品评论、自家产品卖点，"
+            "生成自然、真实、有说服力的买家评论。评论要突出卖点，但不要过度夸张，"
+            "避免模板化，语言像真实买家。每条评论 1-3 句话。"
+        )
+        user_prompt = (
+            f"竞品评论参考：\n{competitor_review}\n\n"
+            f"我们产品的卖点：\n{selling_points}{extra_context}\n\n"
+            f"请生成 {count} 条 {tone} 风格的买家评论语，直接列出，不要带编号。"
+        )
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        answer = ai_chat(messages, temperature=0.8)
+        reviews = [r.strip('- ') for r in answer.strip().split('\n') if r.strip()]
+        return jsonify({'reviews': reviews[:count]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/ai/status', methods=['GET'])
+def ai_status():
+    return jsonify({
+        'configured': bool(AI_API_KEY),
+        'base_url': AI_BASE_URL,
+        'model': AI_CHAT_MODEL,
+    })
+
+
+# ============================================================
 # Frontend
 # ============================================================
 
@@ -1394,7 +1763,7 @@ init_db()
 migrate_db()
 migrate_order_line_items()
 print("=" * 50)
-print("  Review Reconciliation System v3.1 (PostgreSQL)")
+print("  Review Reconciliation System v3.4 (PostgreSQL + AI)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))

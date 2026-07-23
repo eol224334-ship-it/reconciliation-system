@@ -279,6 +279,12 @@
         <div class="sidebar-item" :class="{active: tab==='orders'}" @click="switchTab('orders')">
           <i class="fas fa-clipboard-list"></i><span>{{ t('nav.orders') }}</span>
         </div>
+        <div class="sidebar-item" :class="{active: tab==='ai_kb'}" @click="switchTab('ai_kb')">
+          <i class="fas fa-brain"></i><span>{{ t('nav.aiKb') }}</span>
+        </div>
+        <div class="sidebar-item" :class="{active: tab==='review_gen'}" @click="switchTab('review_gen')">
+          <i class="fas fa-pen-nib"></i><span>{{ t('nav.reviewGen') }}</span>
+        </div>
         <div class="sidebar-item" :class="{active: tab==='audit'}" @click="switchTab('audit')">
           <i class="fas fa-shield-halved"></i><span>{{ t('nav.audit') }}</span>
         </div>
@@ -287,7 +293,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.3.3 | Timezone-safe Excel Date Import</div>
+        <div>v3.4.0 | AI Knowledge Base + Review Generator</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -696,6 +702,110 @@
                     </template>
                   </el-table-column>
                 </el-table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== AI Knowledge Base ==================== -->
+        <div v-else-if="tab==='ai_kb'" key="ai_kb">
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-brain" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('aiKb.title') }}</h3>
+              <div>
+                <el-button type="primary" @click="openKbTextDialog()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('aiKb.addText') }}</el-button>
+                <el-button @click="$refs.kbFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('aiKb.uploadDoc') }}</el-button>
+                <input type="file" ref="kbFileInput" accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none" @change="handleKbFileUpload">
+              </div>
+            </div>
+            <div class="card-body">
+              <el-alert v-if="!aiConfigured" :title="t('aiKb.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
+              <el-table :data="kbDocuments" stripe style="width:100%" v-loading="loading" max-height="300"
+                :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
+                :empty-text="t('aiKb.empty')">
+                <el-table-column prop="title" :label="t('aiKb.docTitle')" min-width="180" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="doc_type" :label="t('aiKb.docType')" width="100">
+                  <template #default="{row}"><el-tag size="small" effect="plain">{{ row.doc_type }}</el-tag></template>
+                </el-table-column>
+                <el-table-column prop="updated_at" :label="t('aiKb.updatedAt')" width="160"></el-table-column>
+                <el-table-column :label="t('col.actions')" width="140" fixed="right">
+                  <template #default="{row}">
+                    <el-button size="small" text @click="openKbTextDialog(row)"><i class="fas fa-pen"></i></el-button>
+                    <el-button size="small" type="danger" text @click="deleteKbDocument(row)"><i class="fas fa-trash"></i></el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fas fa-comments" style="color:var(--color-success);margin-right:8px;"></i>{{ t('aiKb.askTitle') }}</h3>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:12px;margin-bottom:16px;">
+                <el-input v-model="kbChat.product_model" :placeholder="t('aiKb.productModel')" style="flex:1;"></el-input>
+                <el-input v-model="kbChat.question" :placeholder="t('aiKb.questionPlaceholder')" style="flex:3;" @keyup.enter="askKb"></el-input>
+                <el-button type="primary" :loading="kbChat.loading" @click="askKb">{{ t('aiKb.askBtn') }}</el-button>
+              </div>
+              <div v-if="kbChat.answer" class="ai-answer-box" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:16px;line-height:1.7;white-space:pre-wrap;">
+                <div style="font-weight:600;color:#389e0d;margin-bottom:8px;"><i class="fas fa-robot" style="margin-right:6px;"></i>{{ t('aiKb.answer') }}</div>
+                <div>{{ kbChat.answer }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KB Text Dialog -->
+          <el-dialog :title="kbDialog.editing ? t('aiKb.editDoc') : t('aiKb.newDoc')" v-model="kbDialog.visible" width="760px" :close-on-click-modal="false">
+            <el-form :model="kbForm" label-width="80px">
+              <el-form-item :label="t('aiKb.docTitle')" required>
+                <el-input v-model="kbForm.title" :placeholder="t('aiKb.titlePlaceholder')"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('aiKb.docContent')" required>
+                <el-input v-model="kbForm.content" type="textarea" :rows="12" :placeholder="t('aiKb.contentPlaceholder')"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="kbDialog.visible = false">{{ t('btn.cancel') }}</el-button>
+              <el-button type="primary" :loading="saving" @click="saveKbDocument">{{ t('btn.save') }}</el-button>
+            </template>
+          </el-dialog>
+        </div>
+
+        <!-- ==================== Review Generator ==================== -->
+        <div v-else-if="tab==='review_gen'" key="review_gen">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fas fa-pen-nib" style="color:var(--color-purple);margin-right:8px;"></i>{{ t('reviewGen.title') }}</h3>
+            </div>
+            <div class="card-body">
+              <el-alert v-if="!aiConfigured" :title="t('reviewGen.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
+              <div style="display:flex;gap:12px;margin-bottom:16px;">
+                <el-input v-model="reviewGen.product_model" :placeholder="t('reviewGen.productModel')" style="flex:1;"></el-input>
+                <el-select v-model="reviewGen.tone" :placeholder="t('reviewGen.tone')" style="width:140px;">
+                  <el-option :label="t('reviewGen.tonePositive')" value="positive"></el-option>
+                  <el-option :label="t('reviewGen.toneNeutral')" value="neutral"></el-option>
+                  <el-option :label="t('reviewGen.toneProfessional')" value="professional"></el-option>
+                </el-select>
+                <el-input-number v-model="reviewGen.count" :min="1" :max="10" :step="1" :placeholder="t('reviewGen.count')" style="width:120px;"></el-input-number>
+              </div>
+              <el-form-item :label="t('reviewGen.competitorReview')" style="margin-bottom:16px;">
+                <el-input v-model="reviewGen.competitor_review" type="textarea" :rows="5" :placeholder="t('reviewGen.competitorPlaceholder')"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('reviewGen.sellingPoints')" style="margin-bottom:16px;">
+                <el-input v-model="reviewGen.selling_points" type="textarea" :rows="5" :placeholder="t('reviewGen.sellingPointsPlaceholder')"></el-input>
+              </el-form-item>
+              <div style="text-align:right;margin-bottom:20px;">
+                <el-button type="primary" :loading="reviewGen.loading" @click="generateReviews" :disabled="!reviewGen.competitor_review || !reviewGen.selling_points">
+                  <i class="fas fa-wand-magic-sparkles" style="margin-right:4px;"></i>{{ t('reviewGen.generateBtn') }}
+                </el-button>
+              </div>
+              <div v-if="reviewGen.reviews.length > 0">
+                <div style="font-weight:600;color:#374151;margin-bottom:12px;">{{ t('reviewGen.results') }}</div>
+                <div v-for="(item, idx) in reviewGen.reviews" :key="idx" class="review-item" style="background:#f9f0ff;border:1px solid #d3adf7;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                  <div style="line-height:1.6;flex:1;">{{ item }}</div>
+                  <el-button size="small" text @click="copyText(item)"><i class="fas fa-copy"></i></el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -1251,8 +1361,46 @@ const I18N = {
     'nav.dashboard': '财务看板',
     'nav.ledgers': '对账流水',
     'nav.orders': '订单明细',
+    'nav.aiKb': 'AI 知识库',
+    'nav.reviewGen': '评论生成器',
     'nav.audit': '审计日志',
     'nav.settings': '系统设置',
+    'aiKb.title': 'AI 产品知识库',
+    'aiKb.addText': '新增文本知识',
+    'aiKb.uploadDoc': '上传文档',
+    'aiKb.docTitle': '标题',
+    'aiKb.docType': '类型',
+    'aiKb.updatedAt': '更新时间',
+    'aiKb.empty': '暂无知识库文档',
+    'aiKb.askTitle': '智能问答',
+    'aiKb.productModel': '产品型号（可选）',
+    'aiKb.questionPlaceholder': '输入你的问题，例如：这款键盘的续航多久？',
+    'aiKb.askBtn': '提问',
+    'aiKb.answer': 'AI 回答',
+    'aiKb.newDoc': '新增知识',
+    'aiKb.editDoc': '编辑知识',
+    'aiKb.titlePlaceholder': '例如：K530 机械键盘产品手册',
+    'aiKb.contentPlaceholder': '粘贴产品参数、卖点、FAQ 等知识内容...',
+    'aiKb.docContent': '内容',
+    'aiKb.keyMissing': 'AI 服务未配置：请在环境变量中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY',
+    'aiKb.uploadSuccess': '文档上传成功',
+    'aiKb.uploadFail': '文档上传失败',
+    'aiKb.deleteConfirm': '确定删除该知识文档吗？',
+    'reviewGen.title': '评论生成器',
+    'reviewGen.productModel': '产品型号（可选）',
+    'reviewGen.tone': '风格',
+    'reviewGen.tonePositive': '好评',
+    'reviewGen.toneNeutral': '中立',
+    'reviewGen.toneProfessional': '专业',
+    'reviewGen.count': '数量',
+    'reviewGen.competitorReview': '竞品评论语',
+    'reviewGen.competitorPlaceholder': '粘贴竞品的好评或差评作为参考...',
+    'reviewGen.sellingPoints': '我们产品的卖点',
+    'reviewGen.sellingPointsPlaceholder': '例如：三模连接、热插拔轴体、PBT键帽、60小时续航...',
+    'reviewGen.generateBtn': '生成评论',
+    'reviewGen.results': '生成结果',
+    'reviewGen.keyMissing': 'AI 服务未配置：请在环境变量中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY',
+    'reviewGen.generateFail': '生成失败',
     'btn.refresh': '刷新',
     'dash.receivable': '应收总额 (多币种合计CNY)',
     'dash.payable': '应付总额 (多币种合计CNY)',
@@ -1489,6 +1637,14 @@ const I18N = {
     'msg.networkError': '网络错误',
     'msg.timeout': '服务器响应较慢，已自动重试，请稍候（Render 免费版冷启动约需 15-30 秒）',
     'msg.serverError': '服务器错误',
+    'msg.required': '请填写必填项',
+    'msg.loadFail': '加载失败',
+    'msg.saveSuccess': '保存成功',
+    'msg.saveFail': '保存失败',
+    'msg.deleteSuccess': '删除成功',
+    'msg.deleteFail': '删除失败',
+    'msg.copySuccess': '已复制',
+    'msg.copyFail': '复制失败',
     'msg.enterPaymentAmount': '请输入付款金额',
     'msg.productPaymentUpdated': '货值付款信息已更新',
     'msg.productPaymentSuccess': '货值付款记录成功',
@@ -1517,8 +1673,46 @@ const I18N = {
     'nav.dashboard': 'Dashboard',
     'nav.ledgers': 'Ledgers',
     'nav.orders': 'Order Details',
+    'nav.aiKb': 'AI Knowledge Base',
+    'nav.reviewGen': 'Review Generator',
     'nav.audit': 'Audit Log',
     'nav.settings': 'Settings',
+    'aiKb.title': 'AI Product Knowledge Base',
+    'aiKb.addText': 'Add Text',
+    'aiKb.uploadDoc': 'Upload Document',
+    'aiKb.docTitle': 'Title',
+    'aiKb.docType': 'Type',
+    'aiKb.updatedAt': 'Updated',
+    'aiKb.empty': 'No knowledge base documents',
+    'aiKb.askTitle': 'Smart Q&A',
+    'aiKb.productModel': 'Product model (optional)',
+    'aiKb.questionPlaceholder': 'Ask a question, e.g. How long is the battery life?',
+    'aiKb.askBtn': 'Ask',
+    'aiKb.answer': 'AI Answer',
+    'aiKb.newDoc': 'New Document',
+    'aiKb.editDoc': 'Edit Document',
+    'aiKb.titlePlaceholder': 'e.g. K530 Mechanical Keyboard Manual',
+    'aiKb.contentPlaceholder': 'Paste product specs, selling points, FAQs...',
+    'aiKb.docContent': 'Content',
+    'aiKb.keyMissing': 'AI service not configured: set DEEPSEEK_API_KEY or OPENAI_API_KEY env var',
+    'aiKb.uploadSuccess': 'Document uploaded',
+    'aiKb.uploadFail': 'Upload failed',
+    'aiKb.deleteConfirm': 'Delete this knowledge document?',
+    'reviewGen.title': 'Review Generator',
+    'reviewGen.productModel': 'Product model (optional)',
+    'reviewGen.tone': 'Tone',
+    'reviewGen.tonePositive': 'Positive',
+    'reviewGen.toneNeutral': 'Neutral',
+    'reviewGen.toneProfessional': 'Professional',
+    'reviewGen.count': 'Count',
+    'reviewGen.competitorReview': 'Competitor Review',
+    'reviewGen.competitorPlaceholder': 'Paste competitor reviews as reference...',
+    'reviewGen.sellingPoints': 'Our Selling Points',
+    'reviewGen.sellingPointsPlaceholder': 'e.g. tri-mode connection, hot-swap switches, PBT keycaps, 60h battery...',
+    'reviewGen.generateBtn': 'Generate',
+    'reviewGen.results': 'Generated Reviews',
+    'reviewGen.keyMissing': 'AI service not configured: set DEEPSEEK_API_KEY or OPENAI_API_KEY env var',
+    'reviewGen.generateFail': 'Generation failed',
     'btn.refresh': 'Refresh',
     'dash.receivable': 'Total Receivable (Multi-currency CNY)',
     'dash.payable': 'Total Payable (Multi-currency CNY)',
@@ -1755,6 +1949,14 @@ const I18N = {
     'msg.networkError': 'Network error',
     'msg.timeout': 'Server is slow to respond, retrying... (Render free tier cold start may take 15-30s)',
     'msg.serverError': 'Server error',
+    'msg.required': 'Please fill in required fields',
+    'msg.loadFail': 'Load failed',
+    'msg.saveSuccess': 'Saved successfully',
+    'msg.saveFail': 'Save failed',
+    'msg.deleteSuccess': 'Deleted successfully',
+    'msg.deleteFail': 'Delete failed',
+    'msg.copySuccess': 'Copied',
+    'msg.copyFail': 'Copy failed',
     'msg.enterPaymentAmount': 'Please enter payment amount',
     'msg.productPaymentUpdated': 'Product payment info updated',
     'msg.productPaymentSuccess': 'Product payment recorded successfully',
@@ -1855,6 +2057,13 @@ const app = createApp({
       orderDetailForm: { id: null, order_date: '', platform: '', platform_store: '', order_no: '', item: '', qty: 0, price: 0, currency: 'MYR', buyer_commission: 0, total_payment: 0, total_received: 0, fake_order_fee: 0, total_fo_fee: 0, review_commission_rmb: 0, remark: '' },
       orderImportDialogVisible: false,
       orderImportPreview: [],
+
+      aiConfigured: false,
+      kbDocuments: [],
+      kbChat: { product_model: '', question: '', answer: '', loading: false },
+      kbDialog: { visible: false, editing: false },
+      kbForm: { id: null, title: '', content: '' },
+      reviewGen: { product_model: '', competitor_review: '', selling_points: '', tone: 'positive', count: 3, loading: false, reviews: [] },
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -2004,6 +2213,8 @@ const app = createApp({
       if (t === 'dashboard') this.loadSummary();
       if (t === 'ledgers') this.loadLedgers();
       if (t === 'orders') this.loadOrderDetails();
+      if (t === 'ai_kb') { this.loadAiStatus(); this.loadKbDocuments(); }
+      if (t === 'review_gen') this.loadAiStatus();
       if (t === 'audit') this.loadAuditLogs();
       if (t === 'settings') this.loadSettings();
     },
@@ -2952,6 +3163,150 @@ const app = createApp({
         ElementPlus.ElMessage.error(this.t('msg.networkError'));
       }
     },
+
+    // ==================== AI Knowledge Base & Review Generator ====================
+    async loadAiStatus() {
+      try {
+        const res = await fetch('/api/v1/ai/status');
+        if (res.ok) {
+          const data = await res.json();
+          this.aiConfigured = data.configured;
+        }
+      } catch(e) { this.aiConfigured = false; }
+    },
+    async loadKbDocuments() {
+      this.loading = true;
+      try {
+        const res = await fetch('/api/v1/kb/documents');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.kbDocuments = await res.json();
+      } catch(e) {
+        ElementPlus.ElMessage.error(this.t('msg.loadFail'));
+      } finally {
+        this.loading = false;
+      }
+    },
+    openKbTextDialog(row) {
+      if (row) {
+        this.kbForm = { id: row.id, title: row.title, content: row.content || '' };
+        this.kbDialog.editing = true;
+      } else {
+        this.kbForm = { id: null, title: '', content: '' };
+        this.kbDialog.editing = false;
+      }
+      this.kbDialog.visible = true;
+    },
+    async saveKbDocument() {
+      if (!this.kbForm.title || !this.kbForm.content) {
+        ElementPlus.ElMessage.warning(this.t('msg.required'));
+        return;
+      }
+      this.saving = true;
+      try {
+        const url = this.kbForm.id ? '/api/v1/kb/documents/' + this.kbForm.id : '/api/v1/kb/documents';
+        const method = this.kbForm.id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method: method,
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.kbForm)
+        });
+        if (!res.ok) throw new Error();
+        ElementPlus.ElMessage.success(this.t('msg.saveSuccess'));
+        this.kbDialog.visible = false;
+        this.loadKbDocuments();
+      } catch(e) {
+        ElementPlus.ElMessage.error(this.t('msg.saveFail'));
+      }
+      this.saving = false;
+    },
+    async deleteKbDocument(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('aiKb.deleteConfirm'), this.t('btn.confirm'), { type: 'warning' });
+        const res = await fetch('/api/v1/kb/documents/' + row.id, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        ElementPlus.ElMessage.success(this.t('msg.deleteSuccess'));
+        this.loadKbDocuments();
+      } catch(e) {
+        if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.deleteFail'));
+      }
+    },
+    async handleKbFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', file.name);
+      formData.append('doc_type', 'file');
+      this.loading = true;
+      try {
+        const res = await fetch('/api/v1/kb/documents', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'upload failed');
+        ElementPlus.ElMessage.success(this.t('aiKb.uploadSuccess'));
+        this.loadKbDocuments();
+      } catch(e) {
+        ElementPlus.ElMessage.error(e.message || this.t('aiKb.uploadFail'));
+      }
+      this.loading = false;
+      e.target.value = '';
+    },
+    async askKb() {
+      if (!this.kbChat.question) {
+        ElementPlus.ElMessage.warning(this.t('msg.required'));
+        return;
+      }
+      this.kbChat.loading = true;
+      this.kbChat.answer = '';
+      try {
+        const res = await fetch('/api/v1/ai/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            product_model: this.kbChat.product_model,
+            question: this.kbChat.question
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'AI request failed');
+        this.kbChat.answer = data.answer || '';
+      } catch(e) {
+        ElementPlus.ElMessage.error(e.message || this.t('msg.networkError'));
+      }
+      this.kbChat.loading = false;
+    },
+    async generateReviews() {
+      if (!this.reviewGen.competitor_review || !this.reviewGen.selling_points) {
+        ElementPlus.ElMessage.warning(this.t('msg.required'));
+        return;
+      }
+      this.reviewGen.loading = true;
+      try {
+        const res = await fetch('/api/v1/ai/generate-review', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            product_model: this.reviewGen.product_model,
+            competitor_review: this.reviewGen.competitor_review,
+            selling_points: this.reviewGen.selling_points,
+            tone: this.reviewGen.tone,
+            count: this.reviewGen.count
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'generate failed');
+        this.reviewGen.reviews = data.reviews || [];
+      } catch(e) {
+        ElementPlus.ElMessage.error(e.message || this.t('reviewGen.generateFail'));
+      }
+      this.reviewGen.loading = false;
+    },
+    copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        ElementPlus.ElMessage.success(this.t('msg.copySuccess'));
+      }).catch(() => {
+        ElementPlus.ElMessage.error(this.t('msg.copyFail'));
+      });
+    },
   },
 
   watch: {
@@ -3003,6 +3358,7 @@ const app = createApp({
     this.defaultColumnOrder = this.availableColumns.map(c => c.key);
     this.loadColumnSettings();
     this.loadPaymentItemOptions();
+    this.loadAiStatus();
     this.loadSummary();
   }
 });

@@ -9,3 +9,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: DATABASE_URL
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: AI_CHAT_MODEL
+        value: deepseek-chat
+      - key: AI_BASE_URL
+        value: https://api.deepseek.com
