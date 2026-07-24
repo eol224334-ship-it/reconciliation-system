@@ -290,7 +290,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.5.0 | AI Review Workbench</div>
+        <div>v3.5.1 | AI Review Workbench</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -719,6 +719,7 @@
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
                 :empty-text="t('reviewWorkbench.emptyProduct')">
                 <el-table-column prop="sku" label="SKU" width="140" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="category" :label="t('reviewWorkbench.category')" width="110" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="title" :label="t('reviewWorkbench.productTitle')" min-width="140" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="selling_points" :label="t('reviewWorkbench.sellingPoints')" min-width="220" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="updated_at" :label="t('reviewWorkbench.updatedAt')" width="160"></el-table-column>
@@ -733,7 +734,7 @@
 
             <el-tab-pane :label="t('reviewWorkbench.tabCompetitor')" name="competitor">
               <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
-                <el-input v-model="reviewWorkbench.competitorFilter.sku" :placeholder="t('reviewWorkbench.searchSku')" style="width:180px;" clearable></el-input>
+                <el-input v-model="reviewWorkbench.competitorFilter.category" :placeholder="t('reviewWorkbench.searchCategory')" style="width:180px;" clearable></el-input>
                 <el-select v-model="reviewWorkbench.competitorFilter.site" :placeholder="t('reviewWorkbench.site')" clearable style="width:140px;">
                   <el-option v-for="s in reviewGenSites" :key="s.value" :label="s.label" :value="s.value"></el-option>
                 </el-select>
@@ -744,7 +745,7 @@
               <el-table :data="filteredCompetitorReviews" stripe style="width:100%" v-loading="loading" max-height="420"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
                 :empty-text="t('reviewWorkbench.emptyCompetitor')">
-                <el-table-column prop="sku" label="SKU" width="120" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="category" :label="t('reviewWorkbench.category')" width="120" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="site" :label="t('reviewWorkbench.site')" width="100"></el-table-column>
                 <el-table-column prop="review_text" :label="t('reviewWorkbench.reviewText')" min-width="280" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="created_at" :label="t('reviewWorkbench.createdAt')" width="160"></el-table-column>
@@ -758,10 +759,22 @@
 
             <el-tab-pane :label="t('reviewWorkbench.tabTemplate')" name="template">
               <div style="margin-bottom:12px;color:#595959;">{{ t('reviewWorkbench.templateHint') }}</div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
-                <el-tag v-for="(field, idx) in reviewWorkbench.templateFields" :key="idx" closable @close="removeTemplateField(idx)" size="large" effect="plain" style="margin-bottom:6px;">{{ field }}</el-tag>
-                <el-input v-if="reviewWorkbench.addingField" v-model="reviewWorkbench.newField" size="small" style="width:140px;" @keyup.enter="confirmAddTemplateField" @blur="confirmAddTemplateField" ref="newFieldInput"></el-input>
-                <el-button v-else size="small" @click="startAddTemplateField"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addField') }}</el-button>
+              <div v-for="(field, idx) in reviewWorkbench.templateFields" :key="idx" style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;padding:10px;border:1px solid #e4e7ed;border-radius:6px;background:#fff;">
+                <div style="flex:0 0 160px;">
+                  <el-input v-model="field.name" size="small" :placeholder="t('reviewWorkbench.fieldName')"></el-input>
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <div style="margin-bottom:4px;font-size:12px;color:#909399;">{{ t('reviewWorkbench.fieldOptionsHint') }}</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <el-tag v-for="(opt, oidx) in field.options" :key="oidx" closable size="small" @close="removeFieldOption(field, oidx)">{{ opt }}</el-tag>
+                    <el-input v-if="field._addingOption" v-model="field._newOption" size="small" style="width:100px;" @keyup.enter="confirmAddFieldOption(field)" @blur="confirmAddFieldOption(field)"></el-input>
+                    <el-button v-else size="small" text @click="startAddFieldOption(field)"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addOption') }}</el-button>
+                  </div>
+                </div>
+                <el-button size="small" type="danger" text @click="removeTemplateField(idx)"><i class="fas fa-trash"></i></el-button>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px;">
+                <el-button size="small" @click="startAddTemplateField"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addField') }}</el-button>
                 <el-button type="primary" size="small" @click="saveTemplateFields">{{ t('btn.save') }}</el-button>
               </div>
             </el-tab-pane>
@@ -785,6 +798,7 @@
                 <el-button type="primary" :loading="reviewWorkbench.gen.loading" @click="generateReviewWorkbench" :disabled="!reviewWorkbench.gen.sku">{{ t('reviewWorkbench.generateBtn') }}</el-button>
               </div>
               <div v-if="reviewWorkbench.gen.product" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#595959;">
+                <div><strong>{{ t('reviewWorkbench.category') }}：</strong>{{ reviewWorkbench.gen.product.category || '-' }}</div>
                 <div><strong>{{ t('reviewWorkbench.productTitle') }}：</strong>{{ reviewWorkbench.gen.product.title || '-' }}</div>
                 <div><strong>{{ t('reviewWorkbench.sellingPoints') }}：</strong>{{ reviewWorkbench.gen.product.selling_points || '-' }}</div>
                 <div><strong>{{ t('reviewWorkbench.competitorCount') }}：</strong>{{ reviewWorkbench.gen.competitor_count }}</div>
@@ -795,9 +809,12 @@
               </div>
               <el-table v-if="reviewWorkbench.rows.length > 0" :data="reviewWorkbench.rows" stripe style="width:100%" max-height="520"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}">
-                <el-table-column v-for="field in reviewWorkbench.templateFields" :key="field" :prop="field" :label="field" min-width="140" show-overflow-tooltip>
+                <el-table-column v-for="(field, fidx) in reviewWorkbench.templateFields" :key="field.name" :prop="field.name" :label="field.name" min-width="140" show-overflow-tooltip>
                   <template #default="{row}">
-                    <span>{{ row[field] || '' }}</span>
+                    <el-select v-if="field.options && field.options.length" v-model="row[field.name]" size="small" style="width:100%;" clearable>
+                      <el-option v-for="opt in field.options" :key="opt" :label="opt" :value="opt"></el-option>
+                    </el-select>
+                    <el-input v-else v-model="row[field.name]" size="small" type="textarea" :rows="1"></el-input>
                   </template>
                 </el-table-column>
               </el-table>
@@ -809,6 +826,11 @@
             <el-form :model="reviewWorkbench.productForm" label-width="100px">
               <el-form-item :label="t('reviewWorkbench.sku')" required>
                 <el-input v-model="reviewWorkbench.productForm.sku" :disabled="reviewWorkbench.productDialog.editing"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('reviewWorkbench.category')">
+                <el-select v-model="reviewWorkbench.productForm.category" filterable allow-create default-first-option :placeholder="t('reviewWorkbench.categoryPlaceholder')" style="width:100%;">
+                  <el-option v-for="c in productCategories" :key="c" :label="c" :value="c"></el-option>
+                </el-select>
               </el-form-item>
               <el-form-item :label="t('reviewWorkbench.productTitle')">
                 <el-input v-model="reviewWorkbench.productForm.title"></el-input>
@@ -1393,7 +1415,10 @@ const I18N = {
     'reviewWorkbench.importProduct': '批量导入产品',
     'reviewWorkbench.importCompetitor': '批量导入竞品评论',
     'reviewWorkbench.searchSku': '搜索 SKU',
+    'reviewWorkbench.searchCategory': '搜索类目',
     'reviewWorkbench.sku': 'SKU',
+    'reviewWorkbench.category': '类目',
+    'reviewWorkbench.categoryPlaceholder': '例如：鼠标、键盘、耳机',
     'reviewWorkbench.productTitle': '产品名称',
     'reviewWorkbench.sellingPoints': '产品卖点',
     'reviewWorkbench.description': '产品描述',
@@ -1403,13 +1428,16 @@ const I18N = {
     'reviewWorkbench.emptyCompetitor': '暂无竞品评论',
     'reviewWorkbench.site': '站点',
     'reviewWorkbench.reviewText': '评论内容',
-    'reviewWorkbench.templateHint': '配置测评模板的字段。生成评论后，系统会按这些字段自动填充表格，你可以导出 Excel/CSV。',
+    'reviewWorkbench.templateHint': '配置测评模板的字段。生成评论后，系统会按这些字段自动填充表格，你可以导出 Excel/CSV。有选项的字段会在生成时随机填充选项值。',
     'reviewWorkbench.addField': '新增字段',
+    'reviewWorkbench.fieldName': '字段名称',
+    'reviewWorkbench.fieldOptionsHint': '按回车添加可选项（生成时会随机抽取一个填充）',
+    'reviewWorkbench.addOption': '添加选项',
     'reviewWorkbench.inputSku': '输入 SKU',
     'reviewWorkbench.tone': '风格',
     'reviewWorkbench.count': '生成数量',
     'reviewWorkbench.generateBtn': '生成评论',
-    'reviewWorkbench.competitorCount': '匹配竞品评论数',
+    'reviewWorkbench.competitorCount': '匹配竞品类目评论数',
     'reviewWorkbench.generateFail': '生成失败',
     'reviewWorkbench.productRequired': '请先上传产品知识库',
     'reviewWorkbench.deleteProductConfirm': '确定删除该产品知识吗？',
@@ -1704,7 +1732,10 @@ const I18N = {
     'reviewWorkbench.importProduct': 'Import Products',
     'reviewWorkbench.importCompetitor': 'Import Competitor Reviews',
     'reviewWorkbench.searchSku': 'Search SKU',
+    'reviewWorkbench.searchCategory': 'Search category',
     'reviewWorkbench.sku': 'SKU',
+    'reviewWorkbench.category': 'Category',
+    'reviewWorkbench.categoryPlaceholder': 'e.g. mouse, keyboard, headset',
     'reviewWorkbench.productTitle': 'Product Name',
     'reviewWorkbench.sellingPoints': 'Selling Points',
     'reviewWorkbench.description': 'Description',
@@ -1714,13 +1745,16 @@ const I18N = {
     'reviewWorkbench.emptyCompetitor': 'No competitor reviews',
     'reviewWorkbench.site': 'Site',
     'reviewWorkbench.reviewText': 'Review Text',
-    'reviewWorkbench.templateHint': 'Configure the fields of your review template. After generating reviews, the system will fill the table automatically and you can export Excel/CSV.',
+    'reviewWorkbench.templateHint': 'Configure the fields of your review template. After generating reviews, the system will fill the table automatically and you can export Excel/CSV. Fields with options will be filled randomly.',
     'reviewWorkbench.addField': 'Add Field',
+    'reviewWorkbench.fieldName': 'Field name',
+    'reviewWorkbench.fieldOptionsHint': 'Press Enter to add options (one will be picked randomly during generation)',
+    'reviewWorkbench.addOption': 'Add option',
     'reviewWorkbench.inputSku': 'Enter SKU',
     'reviewWorkbench.tone': 'Tone',
     'reviewWorkbench.count': 'Count',
     'reviewWorkbench.generateBtn': 'Generate Reviews',
-    'reviewWorkbench.competitorCount': 'Matched competitor reviews',
+    'reviewWorkbench.competitorCount': 'Matched competitor category reviews',
     'reviewWorkbench.generateFail': 'Generation failed',
     'reviewWorkbench.productRequired': 'Please upload product knowledge first',
     'reviewWorkbench.deleteProductConfirm': 'Delete this product knowledge?',
@@ -2088,18 +2122,25 @@ const app = createApp({
         { value: 'tr', label: '土耳其 TR' },
         { value: 'us', label: '美国 US' },
       ],
+      productCategories: ['鼠标', '键盘', '耳机', '鼠标垫', '显示器', '音箱', '麦克风', '手柄', '数据线', '充电器'],
 
       reviewWorkbench: {
         activeTab: 'product',
         productKnowledge: [],
         productFilter: '',
         competitorReviews: [],
-        competitorFilter: { sku: '', site: '' },
-        templateFields: ['SKU', '站点', '评论内容', '状态', '备注'],
+        competitorFilter: { category: '', site: '' },
+        templateFields: [
+          { name: 'SKU', options: [] },
+          { name: '站点', options: [] },
+          { name: '评论内容', options: [] },
+          { name: '状态', options: ['待发布', '已发布'] },
+          { name: '备注', options: [] },
+        ],
         addingField: false,
         newField: '',
         productDialog: { visible: false, editing: false },
-        productForm: { id: null, sku: '', title: '', selling_points: '', description: '' },
+        productForm: { id: null, sku: '', category: '', title: '', selling_points: '', description: '' },
         gen: { sku: '', site: 'my', tone: 'positive', count: 20, loading: false, reviews: [], product: null, competitor_count: 0 },
         rows: [],
       },
@@ -2190,12 +2231,12 @@ const app = createApp({
       );
     },
     filteredCompetitorReviews() {
-      const kw = (this.reviewWorkbench.competitorFilter.sku || '').trim().toLowerCase();
+      const kw = (this.reviewWorkbench.competitorFilter.category || '').trim().toLowerCase();
       const site = (this.reviewWorkbench.competitorFilter.site || '').toLowerCase();
       return this.reviewWorkbench.competitorReviews.filter(r => {
-        const matchSku = !kw || (r.sku || '').toLowerCase().includes(kw);
+        const matchCategory = !kw || (r.category || '').toLowerCase().includes(kw);
         const matchSite = !site || (r.site || '').toLowerCase() === site;
-        return matchSku && matchSite;
+        return matchCategory && matchSite;
       });
     }
   },
@@ -3248,10 +3289,10 @@ const app = createApp({
     },
     openProductDialog(row) {
       if (row) {
-        this.reviewWorkbench.productForm = { id: row.id, sku: row.sku, title: row.title || '', selling_points: row.selling_points || '', description: row.description || '' };
+        this.reviewWorkbench.productForm = { id: row.id, sku: row.sku, category: row.category || '', title: row.title || '', selling_points: row.selling_points || '', description: row.description || '' };
         this.reviewWorkbench.productDialog.editing = true;
       } else {
-        this.reviewWorkbench.productForm = { id: null, sku: '', title: '', selling_points: '', description: '' };
+        this.reviewWorkbench.productForm = { id: null, sku: '', category: '', title: '', selling_points: '', description: '' };
         this.reviewWorkbench.productDialog.editing = false;
       }
       this.reviewWorkbench.productDialog.visible = true;
@@ -3311,7 +3352,7 @@ const app = createApp({
       this.loading = true;
       try {
         const params = new URLSearchParams();
-        if (this.reviewWorkbench.competitorFilter.sku) params.append('sku', this.reviewWorkbench.competitorFilter.sku);
+        if (this.reviewWorkbench.competitorFilter.category) params.append('category', this.reviewWorkbench.competitorFilter.category);
         if (this.reviewWorkbench.competitorFilter.site) params.append('site', this.reviewWorkbench.competitorFilter.site);
         const res = await fetch('/api/v1/competitor-reviews?' + params.toString());
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -3327,7 +3368,7 @@ const app = createApp({
       if (!file) return;
       const formData = new FormData();
       formData.append('file', file);
-      if (this.reviewWorkbench.competitorFilter.sku) formData.append('sku', this.reviewWorkbench.competitorFilter.sku);
+      if (this.reviewWorkbench.competitorFilter.category) formData.append('category', this.reviewWorkbench.competitorFilter.category);
       if (this.reviewWorkbench.competitorFilter.site) formData.append('site', this.reviewWorkbench.competitorFilter.site);
       this.loading = true;
       try {
@@ -3357,39 +3398,60 @@ const app = createApp({
       try {
         const res = await fetch('/api/v1/review-template/fields');
         if (!res.ok) throw new Error();
-        this.reviewWorkbench.templateFields = await res.json();
+        const data = await res.json();
+        this.reviewWorkbench.templateFields = (data || []).map(f => {
+          if (typeof f === 'string') return { name: f, options: [] };
+          return { name: f.name || '', options: f.options || [] };
+        });
       } catch(e) { /* use default */ }
     },
     async saveTemplateFields() {
       try {
+        const fields = this.reviewWorkbench.templateFields.map(f => ({
+          name: String(f.name || '').trim(),
+          options: (f.options || []).map(o => String(o).trim()).filter(o => o)
+        })).filter(f => f.name);
+        if (!fields.length) {
+          ElementPlus.ElMessage.warning(this.t('msg.required'));
+          return;
+        }
         const res = await fetch('/api/v1/review-template/fields', {
           method: 'PUT',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ fields: this.reviewWorkbench.templateFields })
+          body: JSON.stringify({ fields })
         });
         if (!res.ok) throw new Error();
+        this.reviewWorkbench.templateFields = fields;
         ElementPlus.ElMessage.success(this.t('msg.saveSuccess'));
       } catch(e) {
         ElementPlus.ElMessage.error(this.t('msg.saveFail'));
       }
     },
     startAddTemplateField() {
-      this.reviewWorkbench.addingField = true;
-      this.reviewWorkbench.newField = '';
+      this.reviewWorkbench.templateFields.push({ name: '', options: [], _addingOption: false, _newOption: '' });
       this.$nextTick(() => {
-        try { this.$refs.newFieldInput.focus(); } catch(e) {}
+        // no focus needed
       });
-    },
-    confirmAddTemplateField() {
-      const val = (this.reviewWorkbench.newField || '').trim();
-      if (val && !this.reviewWorkbench.templateFields.includes(val)) {
-        this.reviewWorkbench.templateFields.push(val);
-      }
-      this.reviewWorkbench.addingField = false;
-      this.reviewWorkbench.newField = '';
     },
     removeTemplateField(idx) {
       this.reviewWorkbench.templateFields.splice(idx, 1);
+    },
+    startAddFieldOption(field) {
+      field._addingOption = true;
+      field._newOption = '';
+    },
+    confirmAddFieldOption(field) {
+      const val = (field._newOption || '').trim();
+      if (val && !(field.options || []).includes(val)) {
+        if (!field.options) field.options = [];
+        field.options.push(val);
+      }
+      field._addingOption = false;
+      field._newOption = '';
+    },
+    removeFieldOption(field, idx) {
+      if (!field.options) return;
+      field.options.splice(idx, 1);
     },
     siteLabel(siteValue) {
       const s = this.reviewGenSites.find(x => x.value === siteValue);
@@ -3431,11 +3493,13 @@ const app = createApp({
       this.reviewWorkbench.rows = gen.reviews.map(review => {
         const row = {};
         fields.forEach(f => {
-          const key = String(f).trim();
+          const key = String(f.name || f).trim();
           const lower = key.toLowerCase();
+          const opts = f.options || [];
           if (lower === 'sku' || key === 'SKU') row[key] = gen.sku;
           else if (lower === 'site' || key === '站点' || key === '站點') row[key] = siteLabel;
           else if (lower === 'review' || lower === 'review_text' || key === '评论内容' || key === '评论' || key === '評論內容') row[key] = review;
+          else if (opts.length > 0) row[key] = opts[Math.floor(Math.random() * opts.length)];
           else row[key] = '';
         });
         return row;

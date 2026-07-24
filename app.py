@@ -287,6 +287,7 @@ def init_db():
         """CREATE TABLE IF NOT EXISTS product_knowledge (
             id SERIAL PRIMARY KEY,
             sku TEXT NOT NULL UNIQUE,
+            category TEXT,
             title TEXT,
             selling_points TEXT NOT NULL DEFAULT '',
             description TEXT DEFAULT '',
@@ -298,10 +299,12 @@ def init_db():
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_product_knowledge_sku ON product_knowledge(sku)",
+        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_category ON product_knowledge(category)",
         "CREATE INDEX IF NOT EXISTS idx_product_knowledge_deleted ON product_knowledge(is_deleted)",
         """CREATE TABLE IF NOT EXISTS competitor_reviews (
             id SERIAL PRIMARY KEY,
-            sku TEXT NOT NULL,
+            sku TEXT,
+            category TEXT,
             site TEXT,
             review_text TEXT NOT NULL,
             source_file TEXT,
@@ -311,6 +314,7 @@ def init_db():
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_sku ON competitor_reviews(sku)",
+        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_category ON competitor_reviews(category)",
         "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_site ON competitor_reviews(site)",
         "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_deleted ON competitor_reviews(is_deleted)",
     ]
@@ -438,6 +442,7 @@ def migrate_review_workbench():
             """CREATE TABLE IF NOT EXISTS product_knowledge (
                 id SERIAL PRIMARY KEY,
                 sku TEXT NOT NULL UNIQUE,
+                category TEXT,
                 title TEXT,
                 selling_points TEXT NOT NULL DEFAULT '',
                 description TEXT DEFAULT '',
@@ -449,12 +454,15 @@ def migrate_review_workbench():
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"""
         )
+        db.execute("ALTER TABLE product_knowledge ADD COLUMN IF NOT EXISTS category TEXT")
         db.execute("CREATE INDEX IF NOT EXISTS idx_product_knowledge_sku ON product_knowledge(sku)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_product_knowledge_category ON product_knowledge(category)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_product_knowledge_deleted ON product_knowledge(is_deleted)")
         db.execute(
             """CREATE TABLE IF NOT EXISTS competitor_reviews (
                 id SERIAL PRIMARY KEY,
-                sku TEXT NOT NULL,
+                sku TEXT,
+                category TEXT,
                 site TEXT,
                 review_text TEXT NOT NULL,
                 source_file TEXT,
@@ -464,13 +472,23 @@ def migrate_review_workbench():
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"""
         )
+        db.execute("ALTER TABLE competitor_reviews ADD COLUMN IF NOT EXISTS category TEXT")
+        db.execute("ALTER TABLE competitor_reviews ALTER COLUMN sku DROP NOT NULL")
         db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_sku ON competitor_reviews(sku)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_category ON competitor_reviews(category)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_site ON competitor_reviews(site)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_deleted ON competitor_reviews(is_deleted)")
-        # Default review template fields
+        # Default review template fields (object format with options)
+        default_fields = [
+            {'name': 'SKU', 'options': []},
+            {'name': '站点', 'options': []},
+            {'name': '评论内容', 'options': []},
+            {'name': '状态', 'options': ['待发布', '已发布']},
+            {'name': '备注', 'options': []},
+        ]
         db.execute(
             "INSERT INTO sys_config (key, value) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            ('review_template_fields', json.dumps(['SKU', '站点', '评论内容', '状态', '备注'], ensure_ascii=False))
+            ('review_template_fields', json.dumps(default_fields, ensure_ascii=False))
         )
         db.commit()
     finally:
@@ -1966,8 +1984,9 @@ def _read_excel_or_csv(file):
         raise ValueError('Unsupported file type. Use .xlsx, .xls or .csv')
 
 
-def _upsert_product_knowledge(db, sku, title, selling_points, description, source_type, file_name):
+def _upsert_product_knowledge(db, sku, category, title, selling_points, description, source_type, file_name):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    category = (category or '').strip()
     selling_points = (selling_points or '').strip()
     description = (description or '').strip()
     title = (title or '').strip()
@@ -1976,9 +1995,10 @@ def _upsert_product_knowledge(db, sku, title, selling_points, description, sourc
     if not selling_points:
         return False
     db.execute(
-        """INSERT INTO product_knowledge (sku, title, selling_points, description, source_type, file_name, updated_at, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """INSERT INTO product_knowledge (sku, category, title, selling_points, description, source_type, file_name, updated_at, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (sku) DO UPDATE SET
+             category = EXCLUDED.category,
              title = EXCLUDED.title,
              selling_points = EXCLUDED.selling_points,
              description = EXCLUDED.description,
@@ -1986,7 +2006,7 @@ def _upsert_product_knowledge(db, sku, title, selling_points, description, sourc
              file_name = EXCLUDED.file_name,
              updated_at = EXCLUDED.updated_at,
              is_deleted = 0""",
-        (sku, title, selling_points, description, source_type, file_name, now, now)
+        (sku, category, title, selling_points, description, source_type, file_name, now, now)
     )
     return True
 
@@ -2016,6 +2036,7 @@ def create_or_update_product_knowledge():
     try:
         changed = _upsert_product_knowledge(
             db, sku,
+            data.get('category', ''),
             data.get('title', ''),
             data.get('selling_points', ''),
             data.get('description', ''),
@@ -2043,6 +2064,7 @@ def import_product_knowledge():
             return jsonify({'error': 'No data rows found in file'}), 400
         headers = list(rows[0].keys())
         sku_header = _header_map(headers, 'sku', '型号', '产品型号', '产品编号', '商品编号')
+        category_header = _header_map(headers, 'category', '类目', '分类', '产品类目', '品类')
         title_header = _header_map(headers, 'title', 'name', '产品名称', '品名', '名称')
         selling_header = _header_map(headers, 'selling_points', '卖点', '产品卖点', '核心卖点', 'selling point')
         desc_header = _header_map(headers, 'description', 'desc', '产品描述', '描述', 'detail', 'content')
@@ -2053,10 +2075,11 @@ def import_product_knowledge():
             sku = str(row.get(sku_header) or '').strip()
             if not sku:
                 continue
+            category = str(row.get(category_header) or '').strip() if category_header else ''
             title = str(row.get(title_header) or '').strip() if title_header else ''
             selling = str(row.get(selling_header) or '').strip() if selling_header else ''
             desc = str(row.get(desc_header) or '').strip() if desc_header else ''
-            if _upsert_product_knowledge(db, sku, title, selling, desc, 'excel', file.filename):
+            if _upsert_product_knowledge(db, sku, category, title, selling, desc, 'excel', file.filename):
                 count += 1
         db.commit()
         return jsonify({'imported': count})
@@ -2082,13 +2105,13 @@ def delete_product_knowledge(pk):
 @app.route('/api/v1/competitor-reviews', methods=['GET'])
 def list_competitor_reviews():
     db = get_db()
-    sku = request.args.get('sku', '').strip()
+    category = request.args.get('category', '').strip()
     site = request.args.get('site', '').strip().lower()
     params = []
     where = ['is_deleted = 0']
-    if sku:
-        where.append('sku ILIKE %s')
-        params.append(f'%{sku}%')
+    if category:
+        where.append('category ILIKE %s')
+        params.append(f'%{category}%')
     if site:
         where.append('site ILIKE %s')
         params.append(f'%{site}%')
@@ -2101,7 +2124,7 @@ def list_competitor_reviews():
 @app.route('/api/v1/competitor-reviews/import', methods=['POST'])
 def import_competitor_reviews():
     file = request.files.get('file')
-    default_sku = (request.form.get('sku') or '').strip()
+    default_category = (request.form.get('category') or '').strip()
     default_site = (request.form.get('site') or '').strip().lower()
     if not file or not file.filename:
         return jsonify({'error': 'No file provided'}), 400
@@ -2112,8 +2135,9 @@ def import_competitor_reviews():
             return jsonify({'error': 'No data rows found in file'}), 400
         headers = list(rows[0].keys())
         review_header = _header_map(headers, 'review', 'review_text', 'comment', '评论', '评论内容', 'review content')
-        sku_header = _header_map(headers, 'sku', '型号', '产品型号', '产品编号', '商品编号')
+        category_header = _header_map(headers, 'category', '类目', '分类', '产品类目', '品类')
         site_header = _header_map(headers, 'site', '站点', '国家', 'country')
+        sku_header = _header_map(headers, 'sku', '型号', '产品型号', '产品编号', '商品编号')
         if not review_header:
             return jsonify({'error': 'Could not find review text column. Expected header: review / 评论 / 评论内容'}), 400
         count = 0
@@ -2122,14 +2146,13 @@ def import_competitor_reviews():
             review_text = str(row.get(review_header) or '').strip()
             if not review_text:
                 continue
-            sku = str(row.get(sku_header) or '').strip() if sku_header else default_sku
+            category = str(row.get(category_header) or '').strip() if category_header else default_category
             site = str(row.get(site_header) or '').strip().lower() if site_header else default_site
-            if not sku:
-                continue
+            sku = str(row.get(sku_header) or '').strip() if sku_header else ''
             db.execute(
-                """INSERT INTO competitor_reviews (sku, site, review_text, source_file, created_at, updated_at)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
-                (sku, site, review_text, file.filename, now, now)
+                """INSERT INTO competitor_reviews (sku, category, site, review_text, source_file, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (sku, category, site, review_text, file.filename, now, now)
             )
             count += 1
         db.commit()
@@ -2153,6 +2176,18 @@ def delete_competitor_review(pk):
     return jsonify({'message': 'deleted'})
 
 
+def _normalize_template_fields(fields):
+    """Support both legacy string list and new object list with options."""
+    normalized = []
+    for f in fields:
+        if isinstance(f, str):
+            normalized.append({'name': f, 'options': []})
+        elif isinstance(f, dict) and isinstance(f.get('name'), str):
+            opts = [str(o).strip() for o in (f.get('options') or []) if str(o).strip()]
+            normalized.append({'name': f['name'].strip(), 'options': opts})
+    return normalized
+
+
 @app.route('/api/v1/review-template/fields', methods=['GET'])
 def get_review_template_fields():
     db = get_db()
@@ -2161,8 +2196,17 @@ def get_review_template_fields():
         if value:
             fields = json.loads(value)
         else:
-            fields = ['SKU', '站点', '评论内容', '状态', '备注']
-        return jsonify(fields)
+            fields = []
+        normalized = _normalize_template_fields(fields)
+        if not normalized:
+            normalized = [
+                {'name': 'SKU', 'options': []},
+                {'name': '站点', 'options': []},
+                {'name': '评论内容', 'options': []},
+                {'name': '状态', 'options': ['待发布', '已发布']},
+                {'name': '备注', 'options': []},
+            ]
+        return jsonify(normalized)
     finally:
         db.close()
 
@@ -2173,11 +2217,14 @@ def update_review_template_fields():
     fields = data.get('fields')
     if not isinstance(fields, list) or not fields:
         return jsonify({'error': 'fields must be a non-empty list'}), 400
+    normalized = _normalize_template_fields(fields)
+    if not normalized:
+        return jsonify({'error': 'fields must contain valid field objects'}), 400
     db = get_db()
     try:
-        set_sys_config(db, 'review_template_fields', json.dumps(fields, ensure_ascii=False))
+        set_sys_config(db, 'review_template_fields', json.dumps(normalized, ensure_ascii=False))
         db.commit()
-        return jsonify({'fields': fields})
+        return jsonify({'fields': normalized})
     finally:
         db.close()
 
@@ -2205,43 +2252,50 @@ def review_workbench_generate():
             (sku,)
         ).fetchone()
         product = row_to_dict(product)
+        if not product:
+            return jsonify({'error': 'Product knowledge not found for this SKU'}), 400
+
+        category = (product.get('category') or '').strip()
+        if not category:
+            return jsonify({'error': '该产品知识库未设置类目，请先设置类目'}), 400
 
         competitor_rows = db.execute(
-            'SELECT * FROM competitor_reviews WHERE sku ILIKE %s AND is_deleted = 0 ORDER BY created_at DESC LIMIT 15',
-            (sku,)
+            'SELECT * FROM competitor_reviews WHERE category ILIKE %s AND is_deleted = 0 ORDER BY created_at DESC LIMIT 30',
+            (category,)
         ).fetchall()
         # If site-specific reviews exist, prioritize them
         site_reviews = [r for r in competitor_rows if str(r.get('site') or '').lower() == site]
         other_reviews = [r for r in competitor_rows if str(r.get('site') or '').lower() != site]
-        selected_reviews = (site_reviews + other_reviews)[:10]
+        selected_reviews = (site_reviews + other_reviews)[:15]
         competitor_texts = [r['review_text'] for r in selected_reviews]
 
-        selling_points = product.get('selling_points', '') if product else ''
-        product_title = product.get('title', '') if product else ''
+        selling_points = product.get('selling_points', '')
+        product_title = product.get('title', '')
         if not selling_points and not competitor_texts:
-            return jsonify({'error': 'No product selling points or competitor reviews found for this SKU'}), 400
+            return jsonify({'error': 'No product selling points or competitor reviews found for this category'}), 400
 
         system_prompt = (
-            "你是一位资深跨境电商运营，擅长根据产品卖点和竞品评论，为目标站点生成真实、自然的买家评论。\n"
-            "要求：\n"
-            "1. 评论要像真实买家写的，口语化，避免模板化，每条的表达方式尽量不同。\n"
-            "2. 突出我们产品的卖点，但不要每条都把所有卖点说一遍。\n"
-            "3. 可以参考竞品评论的表达角度和语气，但不要抄袭原文。\n"
-            "4. 每条评论 1-3 句话，适当加入 emoji 增加真实感，但不要每条都加。\n"
-            "5. 必须使用目标站点语言生成评论，翻译要地道。\n"
-            "6. 直接列出评论，不要编号、不要加引号。\n"
+            "你是一位资深跨境电商运营，擅长为不同站点生成真实、自然的买家评价。请严格遵循以下规则：\n"
+            "1. 每条评价必须由“通用评价语”和“产品评价语”两部分自然融合组成：\n"
+            "   - 通用评价语（约占30%-50%）：围绕快递服务、物流时效、商家服务、产品质量、正品保障、保修售后等角度，使用口语化、真实的表达；这些话术不分品牌、不分产品都适用。\n"
+            "   - 产品评价语（约占50%-70%）：结合我们产品卖点和竞品类目评论的表达角度，突出1-2个产品卖点，不要罗列所有卖点。\n"
+            "2. 必须避免所有评论一模一样：每条评论的句式、用词、切入角度、emoji 都要有明显差异；可以长短不一，有的侧重物流，有的侧重产品，有的两者均衡。\n"
+            "3. 不要直接抄袭竞品评论原文，只借鉴表达角度和语气。\n"
+            "4. 适当加入 emoji 增加真实感，但不要每条都加，位置不固定。\n"
+            "5. 必须使用目标站点语言生成评论，翻译要地道，符合当地电商平台买家习惯。\n"
+            "6. 直接列出评论，不要编号、不要加引号、不要每条前面加短横线。\n"
             "7. 严格生成指定数量的评论。"
         )
-        user_prompt = f"目标站点：{site_name}\n目标语言：{target_language}\n tone：{tone}\n\n"
+        user_prompt = f"目标站点：{site_name}\n目标语言：{target_language}\n风格：{tone}\n产品类目：{category}\n产品SKU：{sku}\n\n"
         if product_title:
             user_prompt += f"产品名称：{product_title}\n"
         if selling_points:
             user_prompt += f"我们产品的卖点：\n{selling_points}\n\n"
         if competitor_texts:
-            user_prompt += f"竞品评论参考（共 {len(competitor_texts)} 条）：\n" + "\n".join(f"- {t}" for t in competitor_texts) + "\n\n"
+            user_prompt += f"竞品类目评论参考（共 {len(competitor_texts)} 条）：\n" + "\n".join(f"- {t}" for t in competitor_texts) + "\n\n"
         user_prompt += (
-            f"请根据以上信息，生成 {count} 条 {tone} 风格的买家评论，"
-            f"使用 {target_language} 语言，符合 {site_name} 当地电商平台买家的表达习惯。"
+            f"请根据以上信息，生成 {count} 条买家评价。评价要真实可信、不易被平台识别为模板，"
+            f"通用评价语与产品评价语自然融合，使用 {target_language} 语言，符合 {site_name} 当地电商平台买家表达习惯。"
         )
 
         messages = [
@@ -2287,7 +2341,7 @@ migrate_db()
 migrate_order_line_items()
 migrate_review_workbench()
 print("=" * 50)
-print("  Review Reconciliation System v3.5.0 (PostgreSQL + AI Review Workbench)")
+print("  Review Reconciliation System v3.5.1 (PostgreSQL + AI Review Workbench)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))
