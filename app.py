@@ -2225,11 +2225,15 @@ def get_review_template_fields():
         normalized = _normalize_template_fields(fields)
         if not normalized:
             normalized = [
-                {'name': 'SKU', 'options': []},
-                {'name': '站点', 'options': []},
-                {'name': '评论内容', 'options': []},
-                {'name': '状态', 'options': ['待发布', '已发布']},
-                {'name': '备注', 'options': []},
+                {'name': '发布时间', 'options': ['7月1日', '7月2日', '7月3日', '7月5日', '7月7日', '7月8日', '7月9日', '7月10日', '7月12日', '7月14日']},
+                {'name': '所属平台', 'options': ['Tiktok', 'Shopee']},
+                {'name': '店铺名称', 'options': ['Luna Gadget ID', 'Redragon Official Store']},
+                {'name': '商品链接', 'options': ['https://example.com/product-a', 'https://example.com/product-b', 'https://example.com/product-c', 'https://example.com/product-d', 'https://example.com/product-e']},
+                {'name': '商品标题', 'options': ['Gaming Mouse RGB', 'Mechanical Keyboard Blue Switch', 'Wireless Headset ANC', 'Mouse Pad XL', 'USB-C Charger 65W']},
+                {'name': 'SKU规格', 'options': ['MOUSE-001', 'KB-002', 'HEAD-003', 'PAD-004', 'CHG-005']},
+                {'name': '商品单价', 'options': ['168000', '259000', '365000', '450000', '120000']},
+                {'name': '产品数量', 'options': ['1']},
+                {'name': '文字评论', 'options': []},
             ]
         return jsonify(normalized)
     finally:
