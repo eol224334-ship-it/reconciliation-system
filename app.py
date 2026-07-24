@@ -1686,12 +1686,31 @@ def ai_chat_endpoint():
         db.close()
 
 
+# Site / language mapping for review generation
+SITE_LANGUAGES = {
+    'my': {'name': 'Malaysia', 'language': 'Malay', 'local_name': 'Bahasa Melayu'},
+    'id': {'name': 'Indonesia', 'language': 'Indonesian', 'local_name': 'Bahasa Indonesia'},
+    'th': {'name': 'Thailand', 'language': 'Thai', 'local_name': 'ภาษาไทย'},
+    'ph': {'name': 'Philippines', 'language': 'Filipino (Tagalog)', 'local_name': 'Filipino'},
+    'sg': {'name': 'Singapore', 'language': 'English', 'local_name': 'English'},
+    'vn': {'name': 'Vietnam', 'language': 'Vietnamese', 'local_name': 'Tiếng Việt'},
+    'br': {'name': 'Brazil', 'language': 'Portuguese (Brazil)', 'local_name': 'Português (Brasil)'},
+    'mx': {'name': 'Mexico', 'language': 'Spanish', 'local_name': 'Español'},
+    'co': {'name': 'Colombia', 'language': 'Spanish', 'local_name': 'Español'},
+    'cl': {'name': 'Chile', 'language': 'Spanish', 'local_name': 'Español'},
+    'pl': {'name': 'Poland', 'language': 'Polish', 'local_name': 'Polski'},
+    'tr': {'name': 'Turkey', 'language': 'Turkish', 'local_name': 'Türkçe'},
+    'us': {'name': 'United States', 'language': 'English', 'local_name': 'English'},
+}
+
+
 @app.route('/api/v1/ai/generate-review', methods=['POST'])
 def generate_review_endpoint():
     data = request.get_json() or {}
     competitor_review = data.get('competitor_review', '').strip()
     selling_points = data.get('selling_points', '').strip()
     product_model = data.get('product_model', '').strip()
+    site = data.get('site', 'my').strip().lower()
     count = min(int(data.get('count', 3)), 10)
     tone = data.get('tone', 'positive').strip()
 
@@ -1700,6 +1719,10 @@ def generate_review_endpoint():
 
     if not AI_API_KEY:
         return jsonify({'error': 'AI API Key is not configured. Please set DEEPSEEK_API_KEY or OPENAI_API_KEY environment variable.'}), 503
+
+    site_info = SITE_LANGUAGES.get(site, SITE_LANGUAGES['my'])
+    target_language = site_info['language']
+    site_name = site_info['name']
 
     db = get_db()
     try:
@@ -1710,14 +1733,19 @@ def generate_review_endpoint():
                 extra_context = "\n\n产品知识库参考：\n" + _format_kb_context(chunks)
 
         system_prompt = (
-            "你是一位资深的跨境电商文案专员。请根据用户提供的竞品评论、自家产品卖点，"
+            "你是一位资深的跨境电商文案专员，擅长为不同国家站点撰写本地化买家评论。"
+            "请根据用户提供的竞品评论、自家产品卖点和目标站点语言，"
             "生成自然、真实、有说服力的买家评论。评论要突出卖点，但不要过度夸张，"
             "避免模板化，语言像真实买家。每条评论 1-3 句话。"
+            "翻译必须精准、地道，符合当地电商平台（如 Shopee/Lazada/Amazon）用户的表达习惯。"
         )
         user_prompt = (
+            f"目标站点：{site_name}\n"
+            f"目标语言：{target_language}\n\n"
             f"竞品评论参考：\n{competitor_review}\n\n"
             f"我们产品的卖点：\n{selling_points}{extra_context}\n\n"
-            f"请生成 {count} 条 {tone} 风格的买家评论语，直接列出，不要带编号。"
+            f"请生成 {count} 条 {tone} 风格的买家评论语，使用 {target_language} 语言，"
+            f"直接列出，不要带编号。确保评论符合 {site_name} 当地买家的语言习惯和表达方式。"
         )
         messages = [
             {'role': 'system', 'content': system_prompt},
@@ -1725,7 +1753,7 @@ def generate_review_endpoint():
         ]
         answer = ai_chat(messages, temperature=0.8)
         reviews = [r.strip('- ') for r in answer.strip().split('\n') if r.strip()]
-        return jsonify({'reviews': reviews[:count]})
+        return jsonify({'reviews': reviews[:count], 'site': site, 'language': target_language})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -1763,7 +1791,7 @@ init_db()
 migrate_db()
 migrate_order_line_items()
 print("=" * 50)
-print("  Review Reconciliation System v3.4 (PostgreSQL + AI)")
+print("  Review Reconciliation System v3.4.1 (PostgreSQL + AI)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))

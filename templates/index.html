@@ -293,7 +293,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.4.0 | AI Knowledge Base + Review Generator</div>
+        <div>v3.4.1 | AI Knowledge Base + Review Generator</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -780,9 +780,12 @@
             </div>
             <div class="card-body">
               <el-alert v-if="!aiConfigured" :title="t('reviewGen.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
-              <div style="display:flex;gap:12px;margin-bottom:16px;">
-                <el-input v-model="reviewGen.product_model" :placeholder="t('reviewGen.productModel')" style="flex:1;"></el-input>
-                <el-select v-model="reviewGen.tone" :placeholder="t('reviewGen.tone')" style="width:140px;">
+              <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                <el-input v-model="reviewGen.product_model" :placeholder="t('reviewGen.productModel')" style="flex:1;min-width:180px;"></el-input>
+                <el-select v-model="reviewGen.site" :placeholder="t('reviewGen.site')" style="width:160px;">
+                  <el-option v-for="s in reviewGenSites" :key="s.value" :label="s.label" :value="s.value"></el-option>
+                </el-select>
+                <el-select v-model="reviewGen.tone" :placeholder="t('reviewGen.tone')" style="width:120px;">
                   <el-option :label="t('reviewGen.tonePositive')" value="positive"></el-option>
                   <el-option :label="t('reviewGen.toneNeutral')" value="neutral"></el-option>
                   <el-option :label="t('reviewGen.toneProfessional')" value="professional"></el-option>
@@ -1388,6 +1391,7 @@ const I18N = {
     'aiKb.deleteConfirm': '确定删除该知识文档吗？',
     'reviewGen.title': '评论生成器',
     'reviewGen.productModel': '产品型号（可选）',
+    'reviewGen.site': '站点',
     'reviewGen.tone': '风格',
     'reviewGen.tonePositive': '好评',
     'reviewGen.toneNeutral': '中立',
@@ -1700,6 +1704,7 @@ const I18N = {
     'aiKb.deleteConfirm': 'Delete this knowledge document?',
     'reviewGen.title': 'Review Generator',
     'reviewGen.productModel': 'Product model (optional)',
+    'reviewGen.site': 'Site',
     'reviewGen.tone': 'Tone',
     'reviewGen.tonePositive': 'Positive',
     'reviewGen.toneNeutral': 'Neutral',
@@ -2063,7 +2068,22 @@ const app = createApp({
       kbChat: { product_model: '', question: '', answer: '', loading: false },
       kbDialog: { visible: false, editing: false },
       kbForm: { id: null, title: '', content: '' },
-      reviewGen: { product_model: '', competitor_review: '', selling_points: '', tone: 'positive', count: 3, loading: false, reviews: [] },
+      reviewGen: { product_model: '', site: 'my', competitor_review: '', selling_points: '', tone: 'positive', count: 3, loading: false, reviews: [] },
+      reviewGenSites: [
+        { value: 'my', label: '马来 MY' },
+        { value: 'id', label: '印尼 ID' },
+        { value: 'th', label: '泰国 TH' },
+        { value: 'ph', label: '菲律宾 PH' },
+        { value: 'sg', label: '新加坡 SG' },
+        { value: 'vn', label: '越南 VN' },
+        { value: 'br', label: '巴西 BR' },
+        { value: 'mx', label: '墨西哥 MX' },
+        { value: 'co', label: '哥伦比亚 CO' },
+        { value: 'cl', label: '智利 CL' },
+        { value: 'pl', label: '波兰 PL' },
+        { value: 'tr', label: '土耳其 TR' },
+        { value: 'us', label: '美国 US' },
+      ],
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -3286,6 +3306,7 @@ const app = createApp({
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             product_model: this.reviewGen.product_model,
+            site: this.reviewGen.site,
             competitor_review: this.reviewGen.competitor_review,
             selling_points: this.reviewGen.selling_points,
             tone: this.reviewGen.tone,
