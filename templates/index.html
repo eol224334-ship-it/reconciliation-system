@@ -3617,8 +3617,7 @@ const app = createApp({
           key === '评论内容' || key === '评论' || key === '評論內容' || key === '文字评论' || key === '文字評論';
       };
       const isSiteField = (key, lower) => {
-        return lower === 'site' || key === '站点' || key === '站點' ||
-          key === '所属平台' || key === '所屬平臺' || key === '平台';
+        return lower === 'site' || key === '站点' || key === '站點';
       };
       const isProductField = (key, lower) => {
         const productKeys = ['sku', '规格', '規格', '标题', '標題', '链接', '鏈接', '单价', '單價', '价格', '價格', 'product', 'title', 'link', 'price'];
