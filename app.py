@@ -2264,7 +2264,7 @@ def review_workbench_generate():
     sku = (data.get('sku') or '').strip()
     site = (data.get('site') or 'my').strip().lower()
     tone = (data.get('tone') or 'positive').strip()
-    count = min(int(data.get('count', 20)), 50)
+    count = max(1, min(int(data.get('count', 20)), 50))
     if not sku:
         return jsonify({'error': 'SKU is required'}), 400
     if not AI_API_KEY:
@@ -2312,7 +2312,7 @@ def review_workbench_generate():
             "3. 必须避免所有最终评论一模一样：每条评论的句式、用词、切入角度、emoji 都要有明显差异；可以长短不一，有的侧重物流，有的侧重产品，有的两者均衡。\n"
             "4. 不要直接抄袭竞品评论原文，只借鉴表达角度和语气。\n"
             "5. 每条评论整体控制在 100 字以内，字数和内容不用统一规范，允许有错别字、漏字、重复词，模拟真人真实评论。\n"
-            "6. 适当加入 emoji 增加真实感，但不要每条都加，位置不固定；也可以完全不加。\n"
+            "6. 适当加入 emoji / 表情包增加真实感，位置不固定；建议约 60%-80% 的评论带 1-3 个相关 emoji，不要每条都加，也不要堆砌。\n"
             "7. 必须使用目标站点语言生成评论，翻译要地道，符合当地电商平台买家习惯。\n"
             "8. 直接列出评论，不要编号、不要加引号、不要每条前面加短横线。\n"
             "9. 严格生成指定数量的评论。"
@@ -2327,7 +2327,7 @@ def review_workbench_generate():
         user_prompt += (
             f"请根据以上信息，生成 {count} 条买家评价。每条评价由 3-5 条独立短评组合而成，"
             f"通用评价语和产品评价语各自独立成句、不要融合成一句话；整体控制在 100 字以内，"
-            f"允许有错别字，模拟真实买家评论。使用 {target_language} 语言，符合 {site_name} 当地电商平台买家表达习惯。"
+            f"允许有错别字，可适当带 emoji / 表情包，模拟真实买家评论。使用 {target_language} 语言，符合 {site_name} 当地电商平台买家表达习惯。"
         )
 
         messages = [

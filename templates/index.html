@@ -805,8 +805,8 @@
                 </el-select>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span>{{ t('reviewWorkbench.count') }}：</span>
-                  <el-slider v-model="reviewWorkbench.gen.count" :min="20" :max="30" show-stops style="width:180px;"></el-slider>
-                  <span style="width:30px;">{{ reviewWorkbench.gen.count }}</span>
+                  <el-slider v-model="reviewWorkbench.gen.count" :min="1" :max="50" :step="1" show-stops show-tooltip style="width:200px;"></el-slider>
+                  <el-input-number v-model="reviewWorkbench.gen.count" :min="1" :max="50" :step="1" size="small" style="width:90px;"></el-input-number>
                 </div>
                 <el-button type="primary" :loading="reviewWorkbench.gen.loading" @click="generateReviewWorkbench" :disabled="!reviewWorkbench.gen.sku">{{ t('reviewWorkbench.generateBtn') }}</el-button>
               </div>
