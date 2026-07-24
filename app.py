@@ -283,40 +283,8 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_kb_chunks_document ON kb_chunks(document_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_chunks_search ON kb_chunks USING GIN(search_vector)",
         "CREATE INDEX IF NOT EXISTS idx_kb_documents_deleted ON kb_documents(is_deleted)",
-        # Review Workbench (merged AI KB + Review Generator)
-        """CREATE TABLE IF NOT EXISTS product_knowledge (
-            id SERIAL PRIMARY KEY,
-            sku TEXT NOT NULL UNIQUE,
-            category TEXT,
-            title TEXT,
-            selling_points TEXT NOT NULL DEFAULT '',
-            description TEXT DEFAULT '',
-            source_type TEXT DEFAULT 'manual',
-            file_name TEXT,
-            is_deleted INTEGER NOT NULL DEFAULT 0,
-            deleted_at TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_sku ON product_knowledge(sku)",
-        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_category ON product_knowledge(category)",
-        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_deleted ON product_knowledge(is_deleted)",
-        """CREATE TABLE IF NOT EXISTS competitor_reviews (
-            id SERIAL PRIMARY KEY,
-            sku TEXT,
-            category TEXT,
-            site TEXT,
-            review_text TEXT NOT NULL,
-            source_file TEXT,
-            is_deleted INTEGER NOT NULL DEFAULT 0,
-            deleted_at TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_sku ON competitor_reviews(sku)",
-        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_category ON competitor_reviews(category)",
-        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_site ON competitor_reviews(site)",
-        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_deleted ON competitor_reviews(is_deleted)",
+        # Review Workbench tables/indexes are handled in migrate_review_workbench()
+        # to avoid creating indexes on columns that may need migration first.
     ]
     for stmt in statements:
         db.execute(stmt)
