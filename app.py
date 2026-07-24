@@ -1570,9 +1570,12 @@ def list_kb_documents():
 @app.route('/api/v1/kb/documents', methods=['POST'])
 def create_kb_document():
     db = get_db()
-    title = request.form.get('title', '').strip()
-    doc_type = request.form.get('doc_type', 'text').strip()
-    content = request.form.get('content', '').strip()
+    # Support both JSON (manual text entry) and multipart/form-data (file upload)
+    is_json = request.is_json
+    payload = request.get_json() if is_json else None
+    title = (payload.get('title', '') if payload else request.form.get('title', '')).strip()
+    doc_type = (payload.get('doc_type', 'text') if payload else request.form.get('doc_type', 'text')).strip()
+    content = (payload.get('content', '') if payload else request.form.get('content', '')).strip()
     file = request.files.get('file')
 
     if not title:
