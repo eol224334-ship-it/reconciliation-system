@@ -11,6 +11,8 @@ import base64
 import urllib.request
 import re
 import tempfile
+import csv
+import io
 from datetime import datetime, date
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
@@ -91,14 +93,14 @@ def get_openai_client():
     return _openai_client
 
 
-def ai_chat(messages, temperature=0.7):
+def ai_chat(messages, temperature=0.7, max_tokens=None):
     """Call the configured OpenAI-compatible chat model."""
     client = get_openai_client()
     resp = client.chat.completions.create(
         model=AI_CHAT_MODEL,
         messages=messages,
         temperature=temperature,
-        max_tokens=AI_MAX_TOKENS,
+        max_tokens=max_tokens if max_tokens is not None else AI_MAX_TOKENS,
     )
     return resp.choices[0].message.content
 
@@ -281,6 +283,36 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_kb_chunks_document ON kb_chunks(document_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_chunks_search ON kb_chunks USING GIN(search_vector)",
         "CREATE INDEX IF NOT EXISTS idx_kb_documents_deleted ON kb_documents(is_deleted)",
+        # Review Workbench (merged AI KB + Review Generator)
+        """CREATE TABLE IF NOT EXISTS product_knowledge (
+            id SERIAL PRIMARY KEY,
+            sku TEXT NOT NULL UNIQUE,
+            title TEXT,
+            selling_points TEXT NOT NULL DEFAULT '',
+            description TEXT DEFAULT '',
+            source_type TEXT DEFAULT 'manual',
+            file_name TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_sku ON product_knowledge(sku)",
+        "CREATE INDEX IF NOT EXISTS idx_product_knowledge_deleted ON product_knowledge(is_deleted)",
+        """CREATE TABLE IF NOT EXISTS competitor_reviews (
+            id SERIAL PRIMARY KEY,
+            sku TEXT NOT NULL,
+            site TEXT,
+            review_text TEXT NOT NULL,
+            source_file TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_sku ON competitor_reviews(sku)",
+        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_site ON competitor_reviews(site)",
+        "CREATE INDEX IF NOT EXISTS idx_competitor_reviews_deleted ON competitor_reviews(is_deleted)",
     ]
     for stmt in statements:
         db.execute(stmt)
@@ -393,6 +425,53 @@ def migrate_order_line_items():
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_date ON order_line_items(order_date)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_platform ON order_line_items(platform)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_order_line_store ON order_line_items(platform_store)")
+        db.commit()
+    finally:
+        db.close()
+
+
+def migrate_review_workbench():
+    """Ensure review workbench tables exist for merged AI KB + Review Generator."""
+    db = get_db()
+    try:
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS product_knowledge (
+                id SERIAL PRIMARY KEY,
+                sku TEXT NOT NULL UNIQUE,
+                title TEXT,
+                selling_points TEXT NOT NULL DEFAULT '',
+                description TEXT DEFAULT '',
+                source_type TEXT DEFAULT 'manual',
+                file_name TEXT,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        db.execute("CREATE INDEX IF NOT EXISTS idx_product_knowledge_sku ON product_knowledge(sku)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_product_knowledge_deleted ON product_knowledge(is_deleted)")
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS competitor_reviews (
+                id SERIAL PRIMARY KEY,
+                sku TEXT NOT NULL,
+                site TEXT,
+                review_text TEXT NOT NULL,
+                source_file TEXT,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_sku ON competitor_reviews(sku)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_site ON competitor_reviews(site)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_competitor_reviews_deleted ON competitor_reviews(is_deleted)")
+        # Default review template fields
+        db.execute(
+            "INSERT INTO sys_config (key, value) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            ('review_template_fields', json.dumps(['SKU', '站点', '评论内容', '状态', '备注'], ensure_ascii=False))
+        )
         db.commit()
     finally:
         db.close()
@@ -1845,6 +1924,347 @@ def ai_status():
 
 
 # ============================================================
+# Review Workbench (merged AI Knowledge Base + Review Generator)
+# ============================================================
+
+def _normalize_header(header):
+    if header is None:
+        return ''
+    return str(header).strip().lower().replace(' ', '_').replace('\u3000', '')
+
+
+def _header_map(headers, *candidates):
+    """Return the first header that matches any candidate substring."""
+    norm = [_normalize_header(h) for h in headers]
+    for cand in candidates:
+        cand_norm = _normalize_header(cand)
+        for i, h in enumerate(norm):
+            if cand_norm in h or h in cand_norm:
+                return headers[i]
+    return None
+
+
+def _read_excel_or_csv(file):
+    """Read uploaded file and return list of dict rows."""
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    file_bytes = file.read()
+    if ext in ('xlsx', 'xls'):
+        if not openpyxl:
+            raise RuntimeError('openpyxl is not installed')
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+        headers = rows[0]
+        return [dict(zip(headers, row)) for row in rows[1:] if any(cell is not None for cell in row)]
+    elif ext == 'csv':
+        text = file_bytes.decode('utf-8-sig', errors='ignore')
+        reader = csv.DictReader(io.StringIO(text))
+        return [row for row in reader if any(v is not None and str(v).strip() for v in row.values())]
+    else:
+        raise ValueError('Unsupported file type. Use .xlsx, .xls or .csv')
+
+
+def _upsert_product_knowledge(db, sku, title, selling_points, description, source_type, file_name):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    selling_points = (selling_points or '').strip()
+    description = (description or '').strip()
+    title = (title or '').strip()
+    if not selling_points and description:
+        selling_points = description
+    if not selling_points:
+        return False
+    db.execute(
+        """INSERT INTO product_knowledge (sku, title, selling_points, description, source_type, file_name, updated_at, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+           ON CONFLICT (sku) DO UPDATE SET
+             title = EXCLUDED.title,
+             selling_points = EXCLUDED.selling_points,
+             description = EXCLUDED.description,
+             source_type = EXCLUDED.source_type,
+             file_name = EXCLUDED.file_name,
+             updated_at = EXCLUDED.updated_at,
+             is_deleted = 0""",
+        (sku, title, selling_points, description, source_type, file_name, now, now)
+    )
+    return True
+
+
+@app.route('/api/v1/product-knowledge', methods=['GET'])
+def list_product_knowledge():
+    db = get_db()
+    sku = request.args.get('sku', '').strip()
+    params = []
+    where = ['is_deleted = 0']
+    if sku:
+        where.append('sku ILIKE %s')
+        params.append(f'%{sku}%')
+    sql = 'SELECT * FROM product_knowledge WHERE ' + ' AND '.join(where) + ' ORDER BY updated_at DESC'
+    rows = db.execute(sql, params).fetchall()
+    db.close()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route('/api/v1/product-knowledge', methods=['POST'])
+def create_or_update_product_knowledge():
+    data = request.get_json() or {}
+    sku = (data.get('sku') or '').strip()
+    if not sku:
+        return jsonify({'error': 'SKU is required'}), 400
+    db = get_db()
+    try:
+        changed = _upsert_product_knowledge(
+            db, sku,
+            data.get('title', ''),
+            data.get('selling_points', ''),
+            data.get('description', ''),
+            'manual',
+            None
+        )
+        if not changed:
+            return jsonify({'error': 'Selling points or description is required'}), 400
+        db.commit()
+        row = db.execute('SELECT * FROM product_knowledge WHERE sku = %s', (sku,)).fetchone()
+        return jsonify(row_to_dict(row))
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/product-knowledge/import', methods=['POST'])
+def import_product_knowledge():
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    db = get_db()
+    try:
+        rows = _read_excel_or_csv(file)
+        if not rows:
+            return jsonify({'error': 'No data rows found in file'}), 400
+        headers = list(rows[0].keys())
+        sku_header = _header_map(headers, 'sku', '型号', '产品型号', '产品编号', '商品编号')
+        title_header = _header_map(headers, 'title', 'name', '产品名称', '品名', '名称')
+        selling_header = _header_map(headers, 'selling_points', '卖点', '产品卖点', '核心卖点', 'selling point')
+        desc_header = _header_map(headers, 'description', 'desc', '产品描述', '描述', 'detail', 'content')
+        if not sku_header:
+            return jsonify({'error': 'Could not find SKU column. Expected header: SKU / 型号 / 产品型号'}), 400
+        count = 0
+        for row in rows:
+            sku = str(row.get(sku_header) or '').strip()
+            if not sku:
+                continue
+            title = str(row.get(title_header) or '').strip() if title_header else ''
+            selling = str(row.get(selling_header) or '').strip() if selling_header else ''
+            desc = str(row.get(desc_header) or '').strip() if desc_header else ''
+            if _upsert_product_knowledge(db, sku, title, selling, desc, 'excel', file.filename):
+                count += 1
+        db.commit()
+        return jsonify({'imported': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/product-knowledge/<int:pk>', methods=['DELETE'])
+def delete_product_knowledge(pk):
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    db.execute(
+        'UPDATE product_knowledge SET is_deleted = 1, deleted_at = %s, updated_at = %s WHERE id = %s',
+        (now, now, pk)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'deleted'})
+
+
+@app.route('/api/v1/competitor-reviews', methods=['GET'])
+def list_competitor_reviews():
+    db = get_db()
+    sku = request.args.get('sku', '').strip()
+    site = request.args.get('site', '').strip().lower()
+    params = []
+    where = ['is_deleted = 0']
+    if sku:
+        where.append('sku ILIKE %s')
+        params.append(f'%{sku}%')
+    if site:
+        where.append('site ILIKE %s')
+        params.append(f'%{site}%')
+    sql = 'SELECT * FROM competitor_reviews WHERE ' + ' AND '.join(where) + ' ORDER BY created_at DESC'
+    rows = db.execute(sql, params).fetchall()
+    db.close()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route('/api/v1/competitor-reviews/import', methods=['POST'])
+def import_competitor_reviews():
+    file = request.files.get('file')
+    default_sku = (request.form.get('sku') or '').strip()
+    default_site = (request.form.get('site') or '').strip().lower()
+    if not file or not file.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    db = get_db()
+    try:
+        rows = _read_excel_or_csv(file)
+        if not rows:
+            return jsonify({'error': 'No data rows found in file'}), 400
+        headers = list(rows[0].keys())
+        review_header = _header_map(headers, 'review', 'review_text', 'comment', '评论', '评论内容', 'review content')
+        sku_header = _header_map(headers, 'sku', '型号', '产品型号', '产品编号', '商品编号')
+        site_header = _header_map(headers, 'site', '站点', '国家', 'country')
+        if not review_header:
+            return jsonify({'error': 'Could not find review text column. Expected header: review / 评论 / 评论内容'}), 400
+        count = 0
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        for row in rows:
+            review_text = str(row.get(review_header) or '').strip()
+            if not review_text:
+                continue
+            sku = str(row.get(sku_header) or '').strip() if sku_header else default_sku
+            site = str(row.get(site_header) or '').strip().lower() if site_header else default_site
+            if not sku:
+                continue
+            db.execute(
+                """INSERT INTO competitor_reviews (sku, site, review_text, source_file, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (sku, site, review_text, file.filename, now, now)
+            )
+            count += 1
+        db.commit()
+        return jsonify({'imported': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/competitor-reviews/<int:pk>', methods=['DELETE'])
+def delete_competitor_review(pk):
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    db.execute(
+        'UPDATE competitor_reviews SET is_deleted = 1, deleted_at = %s, updated_at = %s WHERE id = %s',
+        (now, now, pk)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'message': 'deleted'})
+
+
+@app.route('/api/v1/review-template/fields', methods=['GET'])
+def get_review_template_fields():
+    db = get_db()
+    try:
+        value = get_sys_config(db, 'review_template_fields')
+        if value:
+            fields = json.loads(value)
+        else:
+            fields = ['SKU', '站点', '评论内容', '状态', '备注']
+        return jsonify(fields)
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/review-template/fields', methods=['PUT'])
+def update_review_template_fields():
+    data = request.get_json() or {}
+    fields = data.get('fields')
+    if not isinstance(fields, list) or not fields:
+        return jsonify({'error': 'fields must be a non-empty list'}), 400
+    db = get_db()
+    try:
+        set_sys_config(db, 'review_template_fields', json.dumps(fields, ensure_ascii=False))
+        db.commit()
+        return jsonify({'fields': fields})
+    finally:
+        db.close()
+
+
+@app.route('/api/v1/review-workbench/generate', methods=['POST'])
+def review_workbench_generate():
+    data = request.get_json() or {}
+    sku = (data.get('sku') or '').strip()
+    site = (data.get('site') or 'my').strip().lower()
+    tone = (data.get('tone') or 'positive').strip()
+    count = min(int(data.get('count', 20)), 50)
+    if not sku:
+        return jsonify({'error': 'SKU is required'}), 400
+    if not AI_API_KEY:
+        return jsonify({'error': 'AI API Key is not configured. Please set DEEPSEEK_API_KEY or OPENAI_API_KEY environment variable.'}), 503
+
+    site_info = SITE_LANGUAGES.get(site, SITE_LANGUAGES['my'])
+    target_language = site_info['language']
+    site_name = site_info['name']
+
+    db = get_db()
+    try:
+        product = db.execute(
+            'SELECT * FROM product_knowledge WHERE sku ILIKE %s AND is_deleted = 0',
+            (sku,)
+        ).fetchone()
+        product = row_to_dict(product)
+
+        competitor_rows = db.execute(
+            'SELECT * FROM competitor_reviews WHERE sku ILIKE %s AND is_deleted = 0 ORDER BY created_at DESC LIMIT 15',
+            (sku,)
+        ).fetchall()
+        # If site-specific reviews exist, prioritize them
+        site_reviews = [r for r in competitor_rows if str(r.get('site') or '').lower() == site]
+        other_reviews = [r for r in competitor_rows if str(r.get('site') or '').lower() != site]
+        selected_reviews = (site_reviews + other_reviews)[:10]
+        competitor_texts = [r['review_text'] for r in selected_reviews]
+
+        selling_points = product.get('selling_points', '') if product else ''
+        product_title = product.get('title', '') if product else ''
+        if not selling_points and not competitor_texts:
+            return jsonify({'error': 'No product selling points or competitor reviews found for this SKU'}), 400
+
+        system_prompt = (
+            "你是一位资深跨境电商运营，擅长根据产品卖点和竞品评论，为目标站点生成真实、自然的买家评论。\n"
+            "要求：\n"
+            "1. 评论要像真实买家写的，口语化，避免模板化，每条的表达方式尽量不同。\n"
+            "2. 突出我们产品的卖点，但不要每条都把所有卖点说一遍。\n"
+            "3. 可以参考竞品评论的表达角度和语气，但不要抄袭原文。\n"
+            "4. 每条评论 1-3 句话，适当加入 emoji 增加真实感，但不要每条都加。\n"
+            "5. 必须使用目标站点语言生成评论，翻译要地道。\n"
+            "6. 直接列出评论，不要编号、不要加引号。\n"
+            "7. 严格生成指定数量的评论。"
+        )
+        user_prompt = f"目标站点：{site_name}\n目标语言：{target_language}\n tone：{tone}\n\n"
+        if product_title:
+            user_prompt += f"产品名称：{product_title}\n"
+        if selling_points:
+            user_prompt += f"我们产品的卖点：\n{selling_points}\n\n"
+        if competitor_texts:
+            user_prompt += f"竞品评论参考（共 {len(competitor_texts)} 条）：\n" + "\n".join(f"- {t}" for t in competitor_texts) + "\n\n"
+        user_prompt += (
+            f"请根据以上信息，生成 {count} 条 {tone} 风格的买家评论，"
+            f"使用 {target_language} 语言，符合 {site_name} 当地电商平台买家的表达习惯。"
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        answer = ai_chat(messages, temperature=0.8, max_tokens=4096)
+        reviews = [r.strip('- "').strip() for r in answer.strip().split('\n') if r.strip()]
+        return jsonify({
+            'sku': sku,
+            'site': site,
+            'language': target_language,
+            'reviews': reviews[:count],
+            'product': product,
+            'competitor_count': len(competitor_texts),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ============================================================
 # Frontend
 # ============================================================
 
@@ -1865,8 +2285,9 @@ def serve_upload(filename):
 init_db()
 migrate_db()
 migrate_order_line_items()
+migrate_review_workbench()
 print("=" * 50)
-print("  Review Reconciliation System v3.4.2 (PostgreSQL + AI)")
+print("  Review Reconciliation System v3.5.0 (PostgreSQL + AI Review Workbench)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))

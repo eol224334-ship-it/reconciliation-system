@@ -279,11 +279,8 @@
         <div class="sidebar-item" :class="{active: tab==='orders'}" @click="switchTab('orders')">
           <i class="fas fa-clipboard-list"></i><span>{{ t('nav.orders') }}</span>
         </div>
-        <div class="sidebar-item" :class="{active: tab==='ai_kb'}" @click="switchTab('ai_kb')">
-          <i class="fas fa-brain"></i><span>{{ t('nav.aiKb') }}</span>
-        </div>
-        <div class="sidebar-item" :class="{active: tab==='review_gen'}" @click="switchTab('review_gen')">
-          <i class="fas fa-pen-nib"></i><span>{{ t('nav.reviewGen') }}</span>
+        <div class="sidebar-item" :class="{active: tab==='review_workbench'}" @click="switchTab('review_workbench')">
+          <i class="fas fa-robot"></i><span>{{ t('nav.reviewWorkbench') }}</span>
         </div>
         <div class="sidebar-item" :class="{active: tab==='audit'}" @click="switchTab('audit')">
           <i class="fas fa-shield-halved"></i><span>{{ t('nav.audit') }}</span>
@@ -293,7 +290,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.4.2 | AI Knowledge Base + Review Generator</div>
+        <div>v3.5.0 | AI Review Workbench</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -707,114 +704,127 @@
           </div>
         </div>
 
-        <!-- ==================== AI Knowledge Base ==================== -->
-        <div v-else-if="tab==='ai_kb'" key="ai_kb">
-          <div class="card" style="margin-bottom:20px;">
-            <div class="card-header">
-              <h3><i class="fas fa-brain" style="color:var(--color-primary);margin-right:8px;"></i>{{ t('aiKb.title') }}</h3>
-              <div>
-                <el-button type="primary" @click="openKbTextDialog()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('aiKb.addText') }}</el-button>
-                <el-button @click="$refs.kbFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('aiKb.uploadDoc') }}</el-button>
-                <input type="file" ref="kbFileInput" multiple accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none" @change="handleKbFileUpload">
+        <!-- ==================== Review Workbench ==================== -->
+        <div v-else-if="tab==='review_workbench'" key="review_workbench">
+          <el-alert v-if="!aiConfigured" :title="t('reviewWorkbench.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
+          <el-tabs type="border-card" v-model="reviewWorkbench.activeTab">
+            <el-tab-pane :label="t('reviewWorkbench.tabProduct')" name="product">
+              <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
+                <el-input v-model="reviewWorkbench.productFilter" :placeholder="t('reviewWorkbench.searchSku')" style="width:220px;" clearable></el-input>
+                <el-button type="primary" @click="openProductDialog()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addProduct') }}</el-button>
+                <el-button @click="$refs.productFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('reviewWorkbench.importProduct') }}</el-button>
+                <input type="file" ref="productFileInput" accept=".xlsx,.xls,.csv" style="display:none" @change="importProductKnowledge">
               </div>
-            </div>
-            <div class="card-body">
-              <el-alert v-if="!aiConfigured" :title="t('aiKb.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
-              <el-table :data="kbDocuments" stripe style="width:100%" v-loading="loading" max-height="300"
+              <el-table :data="filteredProductKnowledge" stripe style="width:100%" v-loading="loading" max-height="420"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-                :empty-text="t('aiKb.empty')">
-                <el-table-column prop="title" :label="t('aiKb.docTitle')" min-width="180" show-overflow-tooltip></el-table-column>
-                <el-table-column prop="doc_type" :label="t('aiKb.docType')" width="100">
-                  <template #default="{row}"><el-tag size="small" effect="plain">{{ row.doc_type }}</el-tag></template>
-                </el-table-column>
-                <el-table-column prop="updated_at" :label="t('aiKb.updatedAt')" width="160"></el-table-column>
+                :empty-text="t('reviewWorkbench.emptyProduct')">
+                <el-table-column prop="sku" label="SKU" width="140" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="title" :label="t('reviewWorkbench.productTitle')" min-width="140" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="selling_points" :label="t('reviewWorkbench.sellingPoints')" min-width="220" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="updated_at" :label="t('reviewWorkbench.updatedAt')" width="160"></el-table-column>
                 <el-table-column :label="t('col.actions')" width="140" fixed="right">
                   <template #default="{row}">
-                    <el-button size="small" text @click="openKbTextDialog(row)"><i class="fas fa-pen"></i></el-button>
-                    <el-button size="small" type="danger" text @click="deleteKbDocument(row)"><i class="fas fa-trash"></i></el-button>
+                    <el-button size="small" text @click="openProductDialog(row)"><i class="fas fa-pen"></i></el-button>
+                    <el-button size="small" type="danger" text @click="deleteProductKnowledge(row)"><i class="fas fa-trash"></i></el-button>
                   </template>
                 </el-table-column>
               </el-table>
-            </div>
-          </div>
+            </el-tab-pane>
 
-          <div class="card">
-            <div class="card-header">
-              <h3><i class="fas fa-comments" style="color:var(--color-success);margin-right:8px;"></i>{{ t('aiKb.askTitle') }}</h3>
-            </div>
-            <div class="card-body">
-              <div style="display:flex;gap:12px;margin-bottom:16px;">
-                <el-input v-model="kbChat.product_model" :placeholder="t('aiKb.productModel')" style="flex:1;"></el-input>
-                <el-input v-model="kbChat.question" :placeholder="t('aiKb.questionPlaceholder')" style="flex:3;" @keyup.enter="askKb"></el-input>
-                <el-button type="primary" :loading="kbChat.loading" @click="askKb">{{ t('aiKb.askBtn') }}</el-button>
-              </div>
-              <div v-if="kbChat.answer" class="ai-answer-box" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:16px;line-height:1.7;white-space:pre-wrap;">
-                <div style="font-weight:600;color:#389e0d;margin-bottom:8px;"><i class="fas fa-robot" style="margin-right:6px;"></i>{{ t('aiKb.answer') }}</div>
-                <div>{{ kbChat.answer }}</div>
-                <div v-if="kbChat.sources && kbChat.sources.length" style="margin-top:12px;padding-top:12px;border-top:1px dashed #b7eb8f;font-size:12px;color:#595959;">
-                  <i class="fas fa-book-open" style="margin-right:4px;"></i>{{ t('aiKb.sources') }}：{{ kbChat.sources.join('、') }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- KB Text Dialog -->
-          <el-dialog :title="kbDialog.editing ? t('aiKb.editDoc') : t('aiKb.newDoc')" v-model="kbDialog.visible" width="760px" :close-on-click-modal="false">
-            <el-form :model="kbForm" label-width="80px">
-              <el-form-item :label="t('aiKb.docTitle')" required>
-                <el-input v-model="kbForm.title" :placeholder="t('aiKb.titlePlaceholder')"></el-input>
-              </el-form-item>
-              <el-form-item :label="t('aiKb.docContent')" required>
-                <el-input v-model="kbForm.content" type="textarea" :rows="12" :placeholder="t('aiKb.contentPlaceholder')"></el-input>
-              </el-form-item>
-            </el-form>
-            <template #footer>
-              <el-button @click="kbDialog.visible = false">{{ t('btn.cancel') }}</el-button>
-              <el-button type="primary" :loading="saving" @click="saveKbDocument">{{ t('btn.save') }}</el-button>
-            </template>
-          </el-dialog>
-        </div>
-
-        <!-- ==================== Review Generator ==================== -->
-        <div v-else-if="tab==='review_gen'" key="review_gen">
-          <div class="card">
-            <div class="card-header">
-              <h3><i class="fas fa-pen-nib" style="color:var(--color-purple);margin-right:8px;"></i>{{ t('reviewGen.title') }}</h3>
-            </div>
-            <div class="card-body">
-              <el-alert v-if="!aiConfigured" :title="t('reviewGen.keyMissing')" type="warning" :closable="false" style="margin-bottom:16px;" show-icon></el-alert>
-              <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-                <el-input v-model="reviewGen.product_model" :placeholder="t('reviewGen.productModel')" style="flex:1;min-width:180px;"></el-input>
-                <el-select v-model="reviewGen.site" :placeholder="t('reviewGen.site')" style="width:160px;">
+            <el-tab-pane :label="t('reviewWorkbench.tabCompetitor')" name="competitor">
+              <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
+                <el-input v-model="reviewWorkbench.competitorFilter.sku" :placeholder="t('reviewWorkbench.searchSku')" style="width:180px;" clearable></el-input>
+                <el-select v-model="reviewWorkbench.competitorFilter.site" :placeholder="t('reviewWorkbench.site')" clearable style="width:140px;">
                   <el-option v-for="s in reviewGenSites" :key="s.value" :label="s.label" :value="s.value"></el-option>
                 </el-select>
-                <el-select v-model="reviewGen.tone" :placeholder="t('reviewGen.tone')" style="width:120px;">
+                <el-button @click="loadCompetitorReviews"><i class="fas fa-rotate" style="margin-right:4px;"></i>{{ t('btn.refresh') }}</el-button>
+                <el-button @click="$refs.competitorFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('reviewWorkbench.importCompetitor') }}</el-button>
+                <input type="file" ref="competitorFileInput" accept=".xlsx,.xls,.csv" style="display:none" @change="importCompetitorReviews">
+              </div>
+              <el-table :data="filteredCompetitorReviews" stripe style="width:100%" v-loading="loading" max-height="420"
+                :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
+                :empty-text="t('reviewWorkbench.emptyCompetitor')">
+                <el-table-column prop="sku" label="SKU" width="120" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="site" :label="t('reviewWorkbench.site')" width="100"></el-table-column>
+                <el-table-column prop="review_text" :label="t('reviewWorkbench.reviewText')" min-width="280" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="created_at" :label="t('reviewWorkbench.createdAt')" width="160"></el-table-column>
+                <el-table-column :label="t('col.actions')" width="100" fixed="right">
+                  <template #default="{row}">
+                    <el-button size="small" type="danger" text @click="deleteCompetitorReview(row)"><i class="fas fa-trash"></i></el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <el-tab-pane :label="t('reviewWorkbench.tabTemplate')" name="template">
+              <div style="margin-bottom:12px;color:#595959;">{{ t('reviewWorkbench.templateHint') }}</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+                <el-tag v-for="(field, idx) in reviewWorkbench.templateFields" :key="idx" closable @close="removeTemplateField(idx)" size="large" effect="plain" style="margin-bottom:6px;">{{ field }}</el-tag>
+                <el-input v-if="reviewWorkbench.addingField" v-model="reviewWorkbench.newField" size="small" style="width:140px;" @keyup.enter="confirmAddTemplateField" @blur="confirmAddTemplateField" ref="newFieldInput"></el-input>
+                <el-button v-else size="small" @click="startAddTemplateField"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addField') }}</el-button>
+                <el-button type="primary" size="small" @click="saveTemplateFields">{{ t('btn.save') }}</el-button>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane :label="t('reviewWorkbench.tabGenerate')" name="generate">
+              <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+                <el-input v-model="reviewWorkbench.gen.sku" :placeholder="t('reviewWorkbench.inputSku')" style="width:180px;"></el-input>
+                <el-select v-model="reviewWorkbench.gen.site" :placeholder="t('reviewWorkbench.site')" style="width:140px;">
+                  <el-option v-for="s in reviewGenSites" :key="s.value" :label="s.label" :value="s.value"></el-option>
+                </el-select>
+                <el-select v-model="reviewWorkbench.gen.tone" :placeholder="t('reviewWorkbench.tone')" style="width:120px;">
                   <el-option :label="t('reviewGen.tonePositive')" value="positive"></el-option>
                   <el-option :label="t('reviewGen.toneNeutral')" value="neutral"></el-option>
                   <el-option :label="t('reviewGen.toneProfessional')" value="professional"></el-option>
                 </el-select>
-                <el-input-number v-model="reviewGen.count" :min="1" :max="10" :step="1" :placeholder="t('reviewGen.count')" style="width:120px;"></el-input-number>
-              </div>
-              <el-form-item :label="t('reviewGen.competitorReview')" style="margin-bottom:16px;">
-                <el-input v-model="reviewGen.competitor_review" type="textarea" :rows="5" :placeholder="t('reviewGen.competitorPlaceholder')"></el-input>
-              </el-form-item>
-              <el-form-item :label="t('reviewGen.sellingPoints')" style="margin-bottom:16px;">
-                <el-input v-model="reviewGen.selling_points" type="textarea" :rows="5" :placeholder="t('reviewGen.sellingPointsPlaceholder')"></el-input>
-              </el-form-item>
-              <div style="text-align:right;margin-bottom:20px;">
-                <el-button type="primary" :loading="reviewGen.loading" @click="generateReviews" :disabled="!reviewGen.competitor_review || !reviewGen.selling_points">
-                  <i class="fas fa-wand-magic-sparkles" style="margin-right:4px;"></i>{{ t('reviewGen.generateBtn') }}
-                </el-button>
-              </div>
-              <div v-if="reviewGen.reviews.length > 0">
-                <div style="font-weight:600;color:#374151;margin-bottom:12px;">{{ t('reviewGen.results') }}</div>
-                <div v-for="(item, idx) in reviewGen.reviews" :key="idx" class="review-item" style="background:#f9f0ff;border:1px solid #d3adf7;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-                  <div style="line-height:1.6;flex:1;">{{ item }}</div>
-                  <el-button size="small" text @click="copyText(item)"><i class="fas fa-copy"></i></el-button>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span>{{ t('reviewWorkbench.count') }}：</span>
+                  <el-slider v-model="reviewWorkbench.gen.count" :min="20" :max="30" show-stops style="width:180px;"></el-slider>
+                  <span style="width:30px;">{{ reviewWorkbench.gen.count }}</span>
                 </div>
+                <el-button type="primary" :loading="reviewWorkbench.gen.loading" @click="generateReviewWorkbench" :disabled="!reviewWorkbench.gen.sku">{{ t('reviewWorkbench.generateBtn') }}</el-button>
               </div>
-            </div>
-          </div>
+              <div v-if="reviewWorkbench.gen.product" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#595959;">
+                <div><strong>{{ t('reviewWorkbench.productTitle') }}：</strong>{{ reviewWorkbench.gen.product.title || '-' }}</div>
+                <div><strong>{{ t('reviewWorkbench.sellingPoints') }}：</strong>{{ reviewWorkbench.gen.product.selling_points || '-' }}</div>
+                <div><strong>{{ t('reviewWorkbench.competitorCount') }}：</strong>{{ reviewWorkbench.gen.competitor_count }}</div>
+              </div>
+              <div v-if="reviewWorkbench.rows.length > 0" style="margin-bottom:12px;display:flex;gap:10px;justify-content:flex-end;">
+                <el-button size="small" @click="exportReviewTemplate('xlsx')"><i class="fas fa-file-excel" style="margin-right:4px;"></i>Excel</el-button>
+                <el-button size="small" @click="exportReviewTemplate('csv')"><i class="fas fa-file-csv" style="margin-right:4px;"></i>CSV</el-button>
+              </div>
+              <el-table v-if="reviewWorkbench.rows.length > 0" :data="reviewWorkbench.rows" stripe style="width:100%" max-height="520"
+                :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}">
+                <el-table-column v-for="field in reviewWorkbench.templateFields" :key="field" :prop="field" :label="field" min-width="140" show-overflow-tooltip>
+                  <template #default="{row}">
+                    <span>{{ row[field] || '' }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+
+          <!-- Product Dialog -->
+          <el-dialog :title="reviewWorkbench.productDialog.editing ? t('reviewWorkbench.editProduct') : t('reviewWorkbench.addProduct')" v-model="reviewWorkbench.productDialog.visible" width="600px" :close-on-click-modal="false">
+            <el-form :model="reviewWorkbench.productForm" label-width="100px">
+              <el-form-item :label="t('reviewWorkbench.sku')" required>
+                <el-input v-model="reviewWorkbench.productForm.sku" :disabled="reviewWorkbench.productDialog.editing"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('reviewWorkbench.productTitle')">
+                <el-input v-model="reviewWorkbench.productForm.title"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('reviewWorkbench.sellingPoints')" required>
+                <el-input v-model="reviewWorkbench.productForm.selling_points" type="textarea" :rows="6"></el-input>
+              </el-form-item>
+              <el-form-item :label="t('reviewWorkbench.description')">
+                <el-input v-model="reviewWorkbench.productForm.description" type="textarea" :rows="3"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="reviewWorkbench.productDialog.visible = false">{{ t('btn.cancel') }}</el-button>
+              <el-button type="primary" :loading="saving" @click="saveProductKnowledge">{{ t('btn.save') }}</el-button>
+            </template>
+          </el-dialog>
         </div>
 
         <div v-else-if="tab==='audit'" key="audit">
@@ -1367,48 +1377,45 @@ const I18N = {
     'nav.dashboard': '财务看板',
     'nav.ledgers': '对账流水',
     'nav.orders': '订单明细',
-    'nav.aiKb': 'AI 知识库',
-    'nav.reviewGen': '评论生成器',
+    'nav.reviewWorkbench': 'AI 测评工坊',
     'nav.audit': '审计日志',
     'nav.settings': '系统设置',
-    'aiKb.title': 'AI 产品知识库',
-    'aiKb.addText': '新增文本知识',
-    'aiKb.uploadDoc': '上传文档',
-    'aiKb.docTitle': '标题',
-    'aiKb.docType': '类型',
-    'aiKb.updatedAt': '更新时间',
-    'aiKb.empty': '暂无知识库文档',
-    'aiKb.askTitle': '智能问答',
-    'aiKb.productModel': '产品型号（可选）',
-    'aiKb.questionPlaceholder': '输入你的问题，例如：这款键盘的续航多久？',
-    'aiKb.askBtn': '提问',
-    'aiKb.answer': 'AI 回答',
-    'aiKb.sources': '参考来源',
-    'aiKb.newDoc': '新增知识',
-    'aiKb.editDoc': '编辑知识',
-    'aiKb.titlePlaceholder': '例如：K530 机械键盘产品手册',
-    'aiKb.contentPlaceholder': '粘贴产品参数、卖点、FAQ 等知识内容...',
-    'aiKb.docContent': '内容',
-    'aiKb.keyMissing': 'AI 服务未配置：请在环境变量中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY',
-    'aiKb.uploadSuccess': '文档上传成功',
-    'aiKb.uploadFail': '文档上传失败',
-    'aiKb.deleteConfirm': '确定删除该知识文档吗？',
-    'reviewGen.title': '评论生成器',
-    'reviewGen.productModel': '产品型号（可选）',
-    'reviewGen.site': '站点',
-    'reviewGen.tone': '风格',
     'reviewGen.tonePositive': '好评',
     'reviewGen.toneNeutral': '中立',
     'reviewGen.toneProfessional': '专业',
-    'reviewGen.count': '数量',
-    'reviewGen.competitorReview': '竞品评论语',
-    'reviewGen.competitorPlaceholder': '粘贴竞品的好评或差评作为参考...',
-    'reviewGen.sellingPoints': '我们产品的卖点',
-    'reviewGen.sellingPointsPlaceholder': '例如：三模连接、热插拔轴体、PBT键帽、60小时续航...',
-    'reviewGen.generateBtn': '生成评论',
-    'reviewGen.results': '生成结果',
-    'reviewGen.keyMissing': 'AI 服务未配置：请在环境变量中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY',
-    'reviewGen.generateFail': '生成失败',
+    'reviewWorkbench.keyMissing': 'AI 服务未配置：请在环境变量中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY',
+    'reviewWorkbench.tabProduct': '产品知识库',
+    'reviewWorkbench.tabCompetitor': '竞品评论库',
+    'reviewWorkbench.tabTemplate': '测评模板字段',
+    'reviewWorkbench.tabGenerate': '批量生成',
+    'reviewWorkbench.addProduct': '新增产品',
+    'reviewWorkbench.editProduct': '编辑产品',
+    'reviewWorkbench.importProduct': '批量导入产品',
+    'reviewWorkbench.importCompetitor': '批量导入竞品评论',
+    'reviewWorkbench.searchSku': '搜索 SKU',
+    'reviewWorkbench.sku': 'SKU',
+    'reviewWorkbench.productTitle': '产品名称',
+    'reviewWorkbench.sellingPoints': '产品卖点',
+    'reviewWorkbench.description': '产品描述',
+    'reviewWorkbench.updatedAt': '更新时间',
+    'reviewWorkbench.createdAt': '创建时间',
+    'reviewWorkbench.emptyProduct': '暂无产品知识库',
+    'reviewWorkbench.emptyCompetitor': '暂无竞品评论',
+    'reviewWorkbench.site': '站点',
+    'reviewWorkbench.reviewText': '评论内容',
+    'reviewWorkbench.templateHint': '配置测评模板的字段。生成评论后，系统会按这些字段自动填充表格，你可以导出 Excel/CSV。',
+    'reviewWorkbench.addField': '新增字段',
+    'reviewWorkbench.inputSku': '输入 SKU',
+    'reviewWorkbench.tone': '风格',
+    'reviewWorkbench.count': '生成数量',
+    'reviewWorkbench.generateBtn': '生成评论',
+    'reviewWorkbench.competitorCount': '匹配竞品评论数',
+    'reviewWorkbench.generateFail': '生成失败',
+    'reviewWorkbench.productRequired': '请先上传产品知识库',
+    'reviewWorkbench.deleteProductConfirm': '确定删除该产品知识吗？',
+    'reviewWorkbench.deleteCompetitorConfirm': '确定删除该竞品评论吗？',
+    'reviewWorkbench.importSuccess': '导入成功',
+    'reviewWorkbench.importFail': '导入失败',
     'btn.refresh': '刷新',
     'dash.receivable': '应收总额 (多币种合计CNY)',
     'dash.payable': '应付总额 (多币种合计CNY)',
@@ -1681,48 +1688,45 @@ const I18N = {
     'nav.dashboard': 'Dashboard',
     'nav.ledgers': 'Ledgers',
     'nav.orders': 'Order Details',
-    'nav.aiKb': 'AI Knowledge Base',
-    'nav.reviewGen': 'Review Generator',
+    'nav.reviewWorkbench': 'AI Review Studio',
     'nav.audit': 'Audit Log',
     'nav.settings': 'Settings',
-    'aiKb.title': 'AI Product Knowledge Base',
-    'aiKb.addText': 'Add Text',
-    'aiKb.uploadDoc': 'Upload Document',
-    'aiKb.docTitle': 'Title',
-    'aiKb.docType': 'Type',
-    'aiKb.updatedAt': 'Updated',
-    'aiKb.empty': 'No knowledge base documents',
-    'aiKb.askTitle': 'Smart Q&A',
-    'aiKb.productModel': 'Product model (optional)',
-    'aiKb.questionPlaceholder': 'Ask a question, e.g. How long is the battery life?',
-    'aiKb.askBtn': 'Ask',
-    'aiKb.answer': 'AI Answer',
-    'aiKb.sources': 'Sources',
-    'aiKb.newDoc': 'New Document',
-    'aiKb.editDoc': 'Edit Document',
-    'aiKb.titlePlaceholder': 'e.g. K530 Mechanical Keyboard Manual',
-    'aiKb.contentPlaceholder': 'Paste product specs, selling points, FAQs...',
-    'aiKb.docContent': 'Content',
-    'aiKb.keyMissing': 'AI service not configured: set DEEPSEEK_API_KEY or OPENAI_API_KEY env var',
-    'aiKb.uploadSuccess': 'Document uploaded',
-    'aiKb.uploadFail': 'Upload failed',
-    'aiKb.deleteConfirm': 'Delete this knowledge document?',
-    'reviewGen.title': 'Review Generator',
-    'reviewGen.productModel': 'Product model (optional)',
-    'reviewGen.site': 'Site',
-    'reviewGen.tone': 'Tone',
     'reviewGen.tonePositive': 'Positive',
     'reviewGen.toneNeutral': 'Neutral',
     'reviewGen.toneProfessional': 'Professional',
-    'reviewGen.count': 'Count',
-    'reviewGen.competitorReview': 'Competitor Review',
-    'reviewGen.competitorPlaceholder': 'Paste competitor reviews as reference...',
-    'reviewGen.sellingPoints': 'Our Selling Points',
-    'reviewGen.sellingPointsPlaceholder': 'e.g. tri-mode connection, hot-swap switches, PBT keycaps, 60h battery...',
-    'reviewGen.generateBtn': 'Generate',
-    'reviewGen.results': 'Generated Reviews',
-    'reviewGen.keyMissing': 'AI service not configured: set DEEPSEEK_API_KEY or OPENAI_API_KEY env var',
-    'reviewGen.generateFail': 'Generation failed',
+    'reviewWorkbench.keyMissing': 'AI service not configured: set DEEPSEEK_API_KEY or OPENAI_API_KEY env var',
+    'reviewWorkbench.tabProduct': 'Product Knowledge',
+    'reviewWorkbench.tabCompetitor': 'Competitor Reviews',
+    'reviewWorkbench.tabTemplate': 'Review Template Fields',
+    'reviewWorkbench.tabGenerate': 'Batch Generate',
+    'reviewWorkbench.addProduct': 'Add Product',
+    'reviewWorkbench.editProduct': 'Edit Product',
+    'reviewWorkbench.importProduct': 'Import Products',
+    'reviewWorkbench.importCompetitor': 'Import Competitor Reviews',
+    'reviewWorkbench.searchSku': 'Search SKU',
+    'reviewWorkbench.sku': 'SKU',
+    'reviewWorkbench.productTitle': 'Product Name',
+    'reviewWorkbench.sellingPoints': 'Selling Points',
+    'reviewWorkbench.description': 'Description',
+    'reviewWorkbench.updatedAt': 'Updated',
+    'reviewWorkbench.createdAt': 'Created',
+    'reviewWorkbench.emptyProduct': 'No product knowledge',
+    'reviewWorkbench.emptyCompetitor': 'No competitor reviews',
+    'reviewWorkbench.site': 'Site',
+    'reviewWorkbench.reviewText': 'Review Text',
+    'reviewWorkbench.templateHint': 'Configure the fields of your review template. After generating reviews, the system will fill the table automatically and you can export Excel/CSV.',
+    'reviewWorkbench.addField': 'Add Field',
+    'reviewWorkbench.inputSku': 'Enter SKU',
+    'reviewWorkbench.tone': 'Tone',
+    'reviewWorkbench.count': 'Count',
+    'reviewWorkbench.generateBtn': 'Generate Reviews',
+    'reviewWorkbench.competitorCount': 'Matched competitor reviews',
+    'reviewWorkbench.generateFail': 'Generation failed',
+    'reviewWorkbench.productRequired': 'Please upload product knowledge first',
+    'reviewWorkbench.deleteProductConfirm': 'Delete this product knowledge?',
+    'reviewWorkbench.deleteCompetitorConfirm': 'Delete this competitor review?',
+    'reviewWorkbench.importSuccess': 'Import successful',
+    'reviewWorkbench.importFail': 'Import failed',
     'btn.refresh': 'Refresh',
     'dash.receivable': 'Total Receivable (Multi-currency CNY)',
     'dash.payable': 'Total Payable (Multi-currency CNY)',
@@ -2069,11 +2073,6 @@ const app = createApp({
       orderImportPreview: [],
 
       aiConfigured: false,
-      kbDocuments: [],
-      kbChat: { product_model: '', question: '', answer: '', sources: [], loading: false },
-      kbDialog: { visible: false, editing: false },
-      kbForm: { id: null, title: '', content: '' },
-      reviewGen: { product_model: '', site: 'my', competitor_review: '', selling_points: '', tone: 'positive', count: 3, loading: false, reviews: [] },
       reviewGenSites: [
         { value: 'my', label: '马来 MY' },
         { value: 'id', label: '印尼 ID' },
@@ -2089,6 +2088,21 @@ const app = createApp({
         { value: 'tr', label: '土耳其 TR' },
         { value: 'us', label: '美国 US' },
       ],
+
+      reviewWorkbench: {
+        activeTab: 'product',
+        productKnowledge: [],
+        productFilter: '',
+        competitorReviews: [],
+        competitorFilter: { sku: '', site: '' },
+        templateFields: ['SKU', '站点', '评论内容', '状态', '备注'],
+        addingField: false,
+        newField: '',
+        productDialog: { visible: false, editing: false },
+        productForm: { id: null, sku: '', title: '', selling_points: '', description: '' },
+        gen: { sku: '', site: 'my', tone: 'positive', count: 20, loading: false, reviews: [], product: null, competitor_count: 0 },
+        rows: [],
+      },
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
       newPaymentItem: '',
@@ -2166,6 +2180,23 @@ const app = createApp({
       const cny = this.commissionCnyEquivalent;
       const er = this.currentLedger.exchange_rate || 0.000460;
       return cny / er;
+    },
+    filteredProductKnowledge() {
+      const kw = (this.reviewWorkbench.productFilter || '').trim().toLowerCase();
+      if (!kw) return this.reviewWorkbench.productKnowledge;
+      return this.reviewWorkbench.productKnowledge.filter(p =>
+        (p.sku || '').toLowerCase().includes(kw) ||
+        (p.title || '').toLowerCase().includes(kw)
+      );
+    },
+    filteredCompetitorReviews() {
+      const kw = (this.reviewWorkbench.competitorFilter.sku || '').trim().toLowerCase();
+      const site = (this.reviewWorkbench.competitorFilter.site || '').toLowerCase();
+      return this.reviewWorkbench.competitorReviews.filter(r => {
+        const matchSku = !kw || (r.sku || '').toLowerCase().includes(kw);
+        const matchSite = !site || (r.site || '').toLowerCase() === site;
+        return matchSku && matchSite;
+      });
     }
   },
   methods: {
@@ -2238,8 +2269,12 @@ const app = createApp({
       if (t === 'dashboard') this.loadSummary();
       if (t === 'ledgers') this.loadLedgers();
       if (t === 'orders') this.loadOrderDetails();
-      if (t === 'ai_kb') { this.loadAiStatus(); this.loadKbDocuments(); }
-      if (t === 'review_gen') this.loadAiStatus();
+      if (t === 'review_workbench') {
+        this.loadAiStatus();
+        this.loadProductKnowledge();
+        this.loadCompetitorReviews();
+        this.loadTemplateFields();
+      }
       if (t === 'audit') this.loadAuditLogs();
       if (t === 'settings') this.loadSettings();
     },
@@ -3189,7 +3224,7 @@ const app = createApp({
       }
     },
 
-    // ==================== AI Knowledge Base & Review Generator ====================
+    // ==================== Review Workbench ====================
     async loadAiStatus() {
       try {
         const res = await fetch('/api/v1/ai/status');
@@ -3199,145 +3234,222 @@ const app = createApp({
         }
       } catch(e) { this.aiConfigured = false; }
     },
-    async loadKbDocuments() {
+    async loadProductKnowledge() {
       this.loading = true;
       try {
-        const res = await fetch('/api/v1/kb/documents');
+        const res = await fetch('/api/v1/product-knowledge');
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        this.kbDocuments = await res.json();
+        this.reviewWorkbench.productKnowledge = await res.json();
       } catch(e) {
         ElementPlus.ElMessage.error(this.t('msg.loadFail'));
       } finally {
         this.loading = false;
       }
     },
-    openKbTextDialog(row) {
+    openProductDialog(row) {
       if (row) {
-        this.kbForm = { id: row.id, title: row.title, content: row.content || '' };
-        this.kbDialog.editing = true;
+        this.reviewWorkbench.productForm = { id: row.id, sku: row.sku, title: row.title || '', selling_points: row.selling_points || '', description: row.description || '' };
+        this.reviewWorkbench.productDialog.editing = true;
       } else {
-        this.kbForm = { id: null, title: '', content: '' };
-        this.kbDialog.editing = false;
+        this.reviewWorkbench.productForm = { id: null, sku: '', title: '', selling_points: '', description: '' };
+        this.reviewWorkbench.productDialog.editing = false;
       }
-      this.kbDialog.visible = true;
+      this.reviewWorkbench.productDialog.visible = true;
     },
-    async saveKbDocument() {
-      if (!this.kbForm.title || !this.kbForm.content) {
+    async saveProductKnowledge() {
+      const form = this.reviewWorkbench.productForm;
+      if (!form.sku || !form.selling_points) {
         ElementPlus.ElMessage.warning(this.t('msg.required'));
         return;
       }
       this.saving = true;
       try {
-        const url = this.kbForm.id ? '/api/v1/kb/documents/' + this.kbForm.id : '/api/v1/kb/documents';
-        const method = this.kbForm.id ? 'PUT' : 'POST';
-        const res = await fetch(url, {
-          method: method,
+        const res = await fetch('/api/v1/product-knowledge', {
+          method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(this.kbForm)
+          body: JSON.stringify(form)
         });
         if (!res.ok) throw new Error();
         ElementPlus.ElMessage.success(this.t('msg.saveSuccess'));
-        this.kbDialog.visible = false;
-        this.loadKbDocuments();
+        this.reviewWorkbench.productDialog.visible = false;
+        this.loadProductKnowledge();
       } catch(e) {
         ElementPlus.ElMessage.error(this.t('msg.saveFail'));
       }
       this.saving = false;
     },
-    async deleteKbDocument(row) {
+    async deleteProductKnowledge(row) {
       try {
-        await ElementPlus.ElMessageBox.confirm(this.t('aiKb.deleteConfirm'), this.t('btn.confirm'), { type: 'warning' });
-        const res = await fetch('/api/v1/kb/documents/' + row.id, { method: 'DELETE' });
+        await ElementPlus.ElMessageBox.confirm(this.t('reviewWorkbench.deleteProductConfirm'), this.t('btn.confirm'), { type: 'warning' });
+        const res = await fetch('/api/v1/product-knowledge/' + row.id, { method: 'DELETE' });
         if (!res.ok) throw new Error();
         ElementPlus.ElMessage.success(this.t('msg.deleteSuccess'));
-        this.loadKbDocuments();
+        this.loadProductKnowledge();
       } catch(e) {
         if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.deleteFail'));
       }
     },
-    async handleKbFileUpload(e) {
-      const files = Array.from(e.target.files || []);
-      if (!files.length) return;
+    async importProductKnowledge(e) {
+      const file = e.target.files[0];
+      if (!file) return;
       const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
+      formData.append('file', file);
       this.loading = true;
       try {
-        const res = await fetch('/api/v1/kb/documents/batch', { method: 'POST', body: formData });
+        const res = await fetch('/api/v1/product-knowledge/import', { method: 'POST', body: formData });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'upload failed');
-        const uploaded = data.uploaded || 0;
-        const failed = (data.failed || []).length;
-        if (failed > 0) {
-          ElementPlus.ElMessage.warning(`上传完成：成功 ${uploaded} 个，失败 ${failed} 个`);
-        } else {
-          ElementPlus.ElMessage.success(`成功上传 ${uploaded} 个文档`);
-        }
-        this.loadKbDocuments();
-      } catch(e) {
-        ElementPlus.ElMessage.error(e.message || this.t('aiKb.uploadFail'));
+        if (!res.ok) throw new Error(data.error || 'import failed');
+        ElementPlus.ElMessage.success(this.t('reviewWorkbench.importSuccess') + ': ' + (data.imported || 0) + ' ' + this.t('reviewWorkbench.sku'));
+        this.loadProductKnowledge();
+      } catch(err) {
+        ElementPlus.ElMessage.error(err.message || this.t('reviewWorkbench.importFail'));
       }
       this.loading = false;
       e.target.value = '';
     },
-    async askKb() {
-      if (!this.kbChat.question) {
-        ElementPlus.ElMessage.warning(this.t('msg.required'));
-        return;
-      }
-      this.kbChat.loading = true;
-      this.kbChat.answer = '';
-      this.kbChat.sources = [];
+    async loadCompetitorReviews() {
+      this.loading = true;
       try {
-        const res = await fetch('/api/v1/ai/chat', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            product_model: this.kbChat.product_model,
-            question: this.kbChat.question
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'AI request failed');
-        this.kbChat.answer = data.answer || '';
-        this.kbChat.sources = data.sources || [];
+        const params = new URLSearchParams();
+        if (this.reviewWorkbench.competitorFilter.sku) params.append('sku', this.reviewWorkbench.competitorFilter.sku);
+        if (this.reviewWorkbench.competitorFilter.site) params.append('site', this.reviewWorkbench.competitorFilter.site);
+        const res = await fetch('/api/v1/competitor-reviews?' + params.toString());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.reviewWorkbench.competitorReviews = await res.json();
       } catch(e) {
-        ElementPlus.ElMessage.error(e.message || this.t('msg.networkError'));
+        ElementPlus.ElMessage.error(this.t('msg.loadFail'));
+      } finally {
+        this.loading = false;
       }
-      this.kbChat.loading = false;
     },
-    async generateReviews() {
-      if (!this.reviewGen.competitor_review || !this.reviewGen.selling_points) {
+    async importCompetitorReviews(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      if (this.reviewWorkbench.competitorFilter.sku) formData.append('sku', this.reviewWorkbench.competitorFilter.sku);
+      if (this.reviewWorkbench.competitorFilter.site) formData.append('site', this.reviewWorkbench.competitorFilter.site);
+      this.loading = true;
+      try {
+        const res = await fetch('/api/v1/competitor-reviews/import', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'import failed');
+        ElementPlus.ElMessage.success(this.t('reviewWorkbench.importSuccess') + ': ' + (data.imported || 0));
+        this.loadCompetitorReviews();
+      } catch(err) {
+        ElementPlus.ElMessage.error(err.message || this.t('reviewWorkbench.importFail'));
+      }
+      this.loading = false;
+      e.target.value = '';
+    },
+    async deleteCompetitorReview(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('reviewWorkbench.deleteCompetitorConfirm'), this.t('btn.confirm'), { type: 'warning' });
+        const res = await fetch('/api/v1/competitor-reviews/' + row.id, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        ElementPlus.ElMessage.success(this.t('msg.deleteSuccess'));
+        this.loadCompetitorReviews();
+      } catch(e) {
+        if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.deleteFail'));
+      }
+    },
+    async loadTemplateFields() {
+      try {
+        const res = await fetch('/api/v1/review-template/fields');
+        if (!res.ok) throw new Error();
+        this.reviewWorkbench.templateFields = await res.json();
+      } catch(e) { /* use default */ }
+    },
+    async saveTemplateFields() {
+      try {
+        const res = await fetch('/api/v1/review-template/fields', {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ fields: this.reviewWorkbench.templateFields })
+        });
+        if (!res.ok) throw new Error();
+        ElementPlus.ElMessage.success(this.t('msg.saveSuccess'));
+      } catch(e) {
+        ElementPlus.ElMessage.error(this.t('msg.saveFail'));
+      }
+    },
+    startAddTemplateField() {
+      this.reviewWorkbench.addingField = true;
+      this.reviewWorkbench.newField = '';
+      this.$nextTick(() => {
+        try { this.$refs.newFieldInput.focus(); } catch(e) {}
+      });
+    },
+    confirmAddTemplateField() {
+      const val = (this.reviewWorkbench.newField || '').trim();
+      if (val && !this.reviewWorkbench.templateFields.includes(val)) {
+        this.reviewWorkbench.templateFields.push(val);
+      }
+      this.reviewWorkbench.addingField = false;
+      this.reviewWorkbench.newField = '';
+    },
+    removeTemplateField(idx) {
+      this.reviewWorkbench.templateFields.splice(idx, 1);
+    },
+    siteLabel(siteValue) {
+      const s = this.reviewGenSites.find(x => x.value === siteValue);
+      return s ? s.label : siteValue;
+    },
+    async generateReviewWorkbench() {
+      const gen = this.reviewWorkbench.gen;
+      if (!gen.sku) {
         ElementPlus.ElMessage.warning(this.t('msg.required'));
         return;
       }
-      this.reviewGen.loading = true;
+      gen.loading = true;
       try {
-        const res = await fetch('/api/v1/ai/generate-review', {
+        const res = await fetch('/api/v1/review-workbench/generate', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
-            product_model: this.reviewGen.product_model,
-            site: this.reviewGen.site,
-            competitor_review: this.reviewGen.competitor_review,
-            selling_points: this.reviewGen.selling_points,
-            tone: this.reviewGen.tone,
-            count: this.reviewGen.count
+            sku: gen.sku,
+            site: gen.site,
+            tone: gen.tone,
+            count: gen.count
           })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'generate failed');
-        this.reviewGen.reviews = data.reviews || [];
+        gen.reviews = data.reviews || [];
+        gen.product = data.product || null;
+        gen.competitor_count = data.competitor_count || 0;
+        this.buildReviewRows();
       } catch(e) {
-        ElementPlus.ElMessage.error(e.message || this.t('reviewGen.generateFail'));
+        ElementPlus.ElMessage.error(e.message || this.t('reviewWorkbench.generateFail'));
       }
-      this.reviewGen.loading = false;
+      gen.loading = false;
     },
-    copyText(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        ElementPlus.ElMessage.success(this.t('msg.copySuccess'));
-      }).catch(() => {
-        ElementPlus.ElMessage.error(this.t('msg.copyFail'));
+    buildReviewRows() {
+      const gen = this.reviewWorkbench.gen;
+      const fields = this.reviewWorkbench.templateFields;
+      const siteLabel = this.siteLabel(gen.site);
+      this.reviewWorkbench.rows = gen.reviews.map(review => {
+        const row = {};
+        fields.forEach(f => {
+          const key = String(f).trim();
+          const lower = key.toLowerCase();
+          if (lower === 'sku' || key === 'SKU') row[key] = gen.sku;
+          else if (lower === 'site' || key === '站点' || key === '站點') row[key] = siteLabel;
+          else if (lower === 'review' || lower === 'review_text' || key === '评论内容' || key === '评论' || key === '評論內容') row[key] = review;
+          else row[key] = '';
+        });
+        return row;
       });
+    },
+    exportReviewTemplate(fmt) {
+      const rows = this.reviewWorkbench.rows;
+      if (!rows.length) return;
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Reviews');
+      const skuSafe = (this.reviewWorkbench.gen.sku || 'reviews').replace(/[^\w\-]/g, '_');
+      const filename = `review_template_${skuSafe}_${this.reviewWorkbench.gen.site}.${fmt}`;
+      XLSX.writeFile(wb, filename);
     },
   },
 
