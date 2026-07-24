@@ -1281,6 +1281,25 @@ def delete_order_detail(item_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/v1/order-details/batch-delete', methods=['POST'])
+def batch_delete_order_details():
+    data = request.get_json() or {}
+    ids = data.get('ids') or []
+    ids = [int(i) for i in ids if isinstance(i, int) or (isinstance(i, str) and i.isdigit())]
+    if not ids:
+        return jsonify({'error': 'No ids provided'}), 400
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    placeholders = ','.join(['%s'] * len(ids))
+    db.execute(
+        f'UPDATE order_line_items SET is_deleted = 1, deleted_at = %s WHERE id IN ({placeholders})',
+        (now, *ids)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'success': True, 'deleted': len(ids)})
+
+
 @app.route('/api/v1/order-details/platforms', methods=['GET'])
 def list_platforms():
     db = get_db()
@@ -2070,6 +2089,25 @@ def delete_product_knowledge(pk):
     return jsonify({'message': 'deleted'})
 
 
+@app.route('/api/v1/product-knowledge/batch-delete', methods=['POST'])
+def batch_delete_product_knowledge():
+    data = request.get_json() or {}
+    ids = data.get('ids') or []
+    ids = [int(i) for i in ids if isinstance(i, int) or (isinstance(i, str) and i.isdigit())]
+    if not ids:
+        return jsonify({'error': 'No ids provided'}), 400
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    placeholders = ','.join(['%s'] * len(ids))
+    db.execute(
+        f'UPDATE product_knowledge SET is_deleted = 1, deleted_at = %s, updated_at = %s WHERE id IN ({placeholders})',
+        (now, now, *ids)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'success': True, 'deleted': len(ids)})
+
+
 @app.route('/api/v1/competitor-reviews', methods=['GET'])
 def list_competitor_reviews():
     db = get_db()
@@ -2142,6 +2180,25 @@ def delete_competitor_review(pk):
     db.commit()
     db.close()
     return jsonify({'message': 'deleted'})
+
+
+@app.route('/api/v1/competitor-reviews/batch-delete', methods=['POST'])
+def batch_delete_competitor_reviews():
+    data = request.get_json() or {}
+    ids = data.get('ids') or []
+    ids = [int(i) for i in ids if isinstance(i, int) or (isinstance(i, str) and i.isdigit())]
+    if not ids:
+        return jsonify({'error': 'No ids provided'}), 400
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    placeholders = ','.join(['%s'] * len(ids))
+    db.execute(
+        f'UPDATE competitor_reviews SET is_deleted = 1, deleted_at = %s, updated_at = %s WHERE id IN ({placeholders})',
+        (now, now, *ids)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'success': True, 'deleted': len(ids)})
 
 
 def _normalize_template_fields(fields):

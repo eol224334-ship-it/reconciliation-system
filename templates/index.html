@@ -626,6 +626,7 @@
                 <el-button @click="$refs.orderExcelInput.click()"><i class="fas fa-file-excel" style="margin-right:4px;"></i>{{ t('orders.importExcel') }}</el-button>
                 <el-button @click="downloadOrderTemplate"><i class="fas fa-download" style="margin-right:4px;"></i>{{ t('orders.importTemplate') }}</el-button>
                 <el-button @click="exportOrders"><i class="fas fa-file-export" style="margin-right:4px;"></i>{{ t('orders.exportExcel') }}</el-button>
+                <el-button type="danger" :disabled="!orderSelected.length" @click="batchDeleteOrderDetails"><i class="fas fa-trash" style="margin-right:4px;"></i>{{ t('btn.batchDelete') }}({{ orderSelected.length }})</el-button>
                 <input type="file" ref="orderExcelInput" accept=".xlsx,.xls,.csv" style="display:none" @change="handleOrderExcelImport">
               </div>
             </div>
@@ -668,7 +669,10 @@
               <div class="table-wrap">
                 <el-table :data="orderDetails" stripe style="width:100%" v-loading="loading" max-height="620"
                   :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-                  :empty-text="t('orders.empty')">
+                  :empty-text="t('orders.empty')"
+                  @selection-change="val => orderSelected = val"
+                  ref="orderTable">
+                  <el-table-column type="selection" width="45"></el-table-column>
                   <el-table-column type="index" width="45" label="#"></el-table-column>
                   <el-table-column prop="order_date" :label="t('orders.date')" width="110" sortable></el-table-column>
                   <el-table-column prop="platform" :label="t('orders.platform')" width="110"></el-table-column>
@@ -713,11 +717,15 @@
                 <el-input v-model="reviewWorkbench.productFilter" :placeholder="t('reviewWorkbench.searchSku')" style="width:220px;" clearable></el-input>
                 <el-button type="primary" @click="openProductDialog()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('reviewWorkbench.addProduct') }}</el-button>
                 <el-button @click="$refs.productFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('reviewWorkbench.importProduct') }}</el-button>
+                <el-button type="danger" :disabled="!reviewWorkbench.productSelected.length" @click="batchDeleteProductKnowledge"><i class="fas fa-trash" style="margin-right:4px;"></i>{{ t('btn.batchDelete') }}({{ reviewWorkbench.productSelected.length }})</el-button>
                 <input type="file" ref="productFileInput" accept=".xlsx,.xls,.csv" style="display:none" @change="importProductKnowledge">
               </div>
               <el-table :data="filteredProductKnowledge" stripe style="width:100%" v-loading="loading" max-height="420"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-                :empty-text="t('reviewWorkbench.emptyProduct')">
+                :empty-text="t('reviewWorkbench.emptyProduct')"
+                @selection-change="val => reviewWorkbench.productSelected = val"
+                ref="productTable">
+                <el-table-column type="selection" width="45"></el-table-column>
                 <el-table-column prop="sku" label="SKU" width="140" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="category" :label="t('reviewWorkbench.category')" width="110" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="title" :label="t('reviewWorkbench.productTitle')" min-width="140" show-overflow-tooltip></el-table-column>
@@ -740,11 +748,15 @@
                 </el-select>
                 <el-button @click="loadCompetitorReviews"><i class="fas fa-rotate" style="margin-right:4px;"></i>{{ t('btn.refresh') }}</el-button>
                 <el-button @click="$refs.competitorFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('reviewWorkbench.importCompetitor') }}</el-button>
+                <el-button type="danger" :disabled="!reviewWorkbench.competitorSelected.length" @click="batchDeleteCompetitorReviews"><i class="fas fa-trash" style="margin-right:4px;"></i>{{ t('btn.batchDelete') }}({{ reviewWorkbench.competitorSelected.length }})</el-button>
                 <input type="file" ref="competitorFileInput" accept=".xlsx,.xls,.csv" style="display:none" @change="importCompetitorReviews">
               </div>
               <el-table :data="filteredCompetitorReviews" stripe style="width:100%" v-loading="loading" max-height="420"
                 :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
-                :empty-text="t('reviewWorkbench.emptyCompetitor')">
+                :empty-text="t('reviewWorkbench.emptyCompetitor')"
+                @selection-change="val => reviewWorkbench.competitorSelected = val"
+                ref="competitorTable">
+                <el-table-column type="selection" width="45"></el-table-column>
                 <el-table-column prop="category" :label="t('reviewWorkbench.category')" width="120" show-overflow-tooltip></el-table-column>
                 <el-table-column prop="site" :label="t('reviewWorkbench.site')" width="100"></el-table-column>
                 <el-table-column prop="review_text" :label="t('reviewWorkbench.reviewText')" min-width="280" show-overflow-tooltip></el-table-column>
@@ -804,11 +816,15 @@
                 <div><strong>{{ t('reviewWorkbench.competitorCount') }}：</strong>{{ reviewWorkbench.gen.competitor_count }}</div>
               </div>
               <div v-if="reviewWorkbench.rows.length > 0" style="margin-bottom:12px;display:flex;gap:10px;justify-content:flex-end;">
+                <el-button type="danger" :disabled="!reviewWorkbench.rowsSelected.length" @click="batchDeleteReviewRows"><i class="fas fa-trash" style="margin-right:4px;"></i>{{ t('btn.batchDelete') }}({{ reviewWorkbench.rowsSelected.length }})</el-button>
                 <el-button size="small" @click="exportReviewTemplate('xlsx')"><i class="fas fa-file-excel" style="margin-right:4px;"></i>Excel</el-button>
                 <el-button size="small" @click="exportReviewTemplate('csv')"><i class="fas fa-file-csv" style="margin-right:4px;"></i>CSV</el-button>
               </div>
               <el-table v-if="reviewWorkbench.rows.length > 0" :data="reviewWorkbench.rows" stripe style="width:100%" max-height="520"
-                :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}">
+                :header-cell-style="{background:'#fafbfc',color:'#6b7280',fontWeight:600,fontSize:'12px'}"
+                @selection-change="val => reviewWorkbench.rowsSelected = val"
+                ref="reviewRowsTable">
+                <el-table-column type="selection" width="45"></el-table-column>
                 <el-table-column v-for="(field, fidx) in reviewWorkbench.templateFields" :key="field.name" :prop="field.name" :label="field.name" min-width="140" show-overflow-tooltip>
                   <template #default="{row}">
                     <el-select v-if="field.options && field.options.length" v-model="row[field.name]" size="small" style="width:100%;" clearable>
@@ -1518,6 +1534,7 @@ const I18N = {
     'ledger.apStatus': 'AP状态',
     'btn.filter': '筛选',
     'btn.reset': '重置',
+    'btn.batchDelete': '批量删除',
     'ledger.columnSettings': '列设置',
     'ledger.customColumns': '自定义显示列',
     'btn.resetDefault': '恢复默认',
@@ -1686,6 +1703,9 @@ const I18N = {
     'msg.saveFail': '保存失败',
     'msg.deleteSuccess': '删除成功',
     'msg.deleteFail': '删除失败',
+    'msg.confirmBatchDelete': '确认批量删除选中的 {count} 条记录？此操作为软删除，数据不会丢失。',
+    'msg.batchDeleteSuccess': '成功批量删除 {count} 条记录',
+    'msg.batchDeleteFail': '批量删除失败',
     'msg.copySuccess': '已复制',
     'msg.copyFail': '复制失败',
     'msg.enterPaymentAmount': '请输入付款金额',
@@ -1835,6 +1855,7 @@ const I18N = {
     'ledger.apStatus': 'AP Status',
     'btn.filter': 'Filter',
     'btn.reset': 'Reset',
+    'btn.batchDelete': 'Batch Delete',
     'ledger.columnSettings': 'Columns',
     'ledger.customColumns': 'Custom Display Columns',
     'btn.resetDefault': 'Reset to Default',
@@ -2003,6 +2024,9 @@ const I18N = {
     'msg.saveFail': 'Save failed',
     'msg.deleteSuccess': 'Deleted successfully',
     'msg.deleteFail': 'Delete failed',
+    'msg.confirmBatchDelete': 'Confirm batch delete of selected {count} records? This is a soft delete, data will not be lost.',
+    'msg.batchDeleteSuccess': 'Successfully batch deleted {count} records',
+    'msg.batchDeleteFail': 'Batch delete failed',
     'msg.copySuccess': 'Copied',
     'msg.copyFail': 'Copy failed',
     'msg.enterPaymentAmount': 'Please enter payment amount',
@@ -2097,6 +2121,7 @@ const app = createApp({
       feishuConfig: { feishu_webhook_url: '', feishu_webhook_secret: '', feishu_enabled: false },
 
       orderDetails: [],
+      orderSelected: [],
       orderFilter: { dateRange: [], platform: '', platform_store: '' },
       orderSummary: { count: 0, total_qty: 0, total_payment: 0, total_received: 0, total_fo_fee: 0, total_review_commission_rmb: 0 },
       orderPlatforms: [],
@@ -2127,8 +2152,10 @@ const app = createApp({
       reviewWorkbench: {
         activeTab: 'product',
         productKnowledge: [],
+        productSelected: [],
         productFilter: '',
         competitorReviews: [],
+        competitorSelected: [],
         competitorFilter: { category: '', site: '' },
         templateFields: [
           { name: 'SKU', options: [] },
@@ -2141,6 +2168,7 @@ const app = createApp({
         productForm: { id: null, sku: '', category: '', title: '', selling_points: '', description: '' },
         gen: { sku: '', site: 'my', tone: 'positive', count: 20, loading: false, reviews: [], product: null, competitor_count: 0 },
         rows: [],
+        rowsSelected: [],
       },
 
       paymentItemOptions: ['FO-PLAN', 'FO-PRO', 'FO-BASIC', 'CUSTOM'],
@@ -2607,6 +2635,31 @@ const app = createApp({
       } catch(e) {
         console.error('deleteOrderDetail error:', e);
         ElementPlus.ElMessage.error(this.t('msg.deleteOrderFail'));
+      } finally {
+        this.loading = false;
+      }
+    },
+    async batchDeleteOrderDetails() {
+      const rows = this.orderSelected;
+      if (!rows.length) return;
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('msg.confirmBatchDelete').replace('{count}', rows.length), this.t('dialog.confirm'), { type: 'warning' });
+      } catch(e) { return; }
+      this.loading = true;
+      try {
+        const res = await this.fetchWithTimeout('/api/v1/order-details/batch-delete', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ ids: rows.map(r => r.id) })
+        }, 30000);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        ElementPlus.ElMessage.success(this.t('msg.batchDeleteSuccess').replace('{count}', data.deleted || rows.length));
+        this.orderSelected = [];
+        this.loadOrderDetails();
+      } catch(e) {
+        console.error('batchDeleteOrderDetails error:', e);
+        ElementPlus.ElMessage.error(this.t('msg.batchDeleteFail'));
       } finally {
         this.loading = false;
       }
@@ -3328,6 +3381,30 @@ const app = createApp({
         if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.deleteFail'));
       }
     },
+    async batchDeleteProductKnowledge() {
+      const rows = this.reviewWorkbench.productSelected;
+      if (!rows.length) return;
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('msg.confirmBatchDelete').replace('{count}', rows.length), this.t('btn.confirm'), { type: 'warning' });
+      } catch(e) { return; }
+      this.loading = true;
+      try {
+        const res = await fetch('/api/v1/product-knowledge/batch-delete', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ ids: rows.map(r => r.id) })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        ElementPlus.ElMessage.success(this.t('msg.batchDeleteSuccess').replace('{count}', data.deleted || rows.length));
+        this.reviewWorkbench.productSelected = [];
+        this.loadProductKnowledge();
+      } catch(e) {
+        if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.batchDeleteFail'));
+      } finally {
+        this.loading = false;
+      }
+    },
     async importProductKnowledge(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -3390,6 +3467,30 @@ const app = createApp({
         this.loadCompetitorReviews();
       } catch(e) {
         if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.deleteFail'));
+      }
+    },
+    async batchDeleteCompetitorReviews() {
+      const rows = this.reviewWorkbench.competitorSelected;
+      if (!rows.length) return;
+      try {
+        await ElementPlus.ElMessageBox.confirm(this.t('msg.confirmBatchDelete').replace('{count}', rows.length), this.t('btn.confirm'), { type: 'warning' });
+      } catch(e) { return; }
+      this.loading = true;
+      try {
+        const res = await fetch('/api/v1/competitor-reviews/batch-delete', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ ids: rows.map(r => r.id) })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        ElementPlus.ElMessage.success(this.t('msg.batchDeleteSuccess').replace('{count}', data.deleted || rows.length));
+        this.reviewWorkbench.competitorSelected = [];
+        this.loadCompetitorReviews();
+      } catch(e) {
+        if (e !== 'cancel') ElementPlus.ElMessage.error(this.t('msg.batchDeleteFail'));
+      } finally {
+        this.loading = false;
       }
     },
     async loadTemplateFields() {
@@ -3512,6 +3613,14 @@ const app = createApp({
       const skuSafe = (this.reviewWorkbench.gen.sku || 'reviews').replace(/[^\w\-]/g, '_');
       const filename = `review_template_${skuSafe}_${this.reviewWorkbench.gen.site}.${fmt}`;
       XLSX.writeFile(wb, filename);
+    },
+    batchDeleteReviewRows() {
+      const selected = this.reviewWorkbench.rowsSelected;
+      if (!selected.length) return;
+      const selectedSet = new Set(selected);
+      this.reviewWorkbench.rows = this.reviewWorkbench.rows.filter(r => !selectedSet.has(r));
+      this.reviewWorkbench.rowsSelected = [];
+      ElementPlus.ElMessage.success(this.t('msg.deleteSuccess'));
     },
   },
 
