@@ -1428,10 +1428,10 @@ const I18N = {
     'reviewWorkbench.emptyCompetitor': '暂无竞品评论',
     'reviewWorkbench.site': '站点',
     'reviewWorkbench.reviewText': '评论内容',
-    'reviewWorkbench.templateHint': '配置测评模板的字段。生成评论后，系统会按这些字段自动填充表格，你可以导出 Excel/CSV。有选项的字段会在生成时随机填充选项值。',
+    'reviewWorkbench.templateHint': '配置测评模板的字段。生成评论后，系统会按这些字段自动填充表格，你可以导出 Excel/CSV。有选项的字段会在生成时按顺序依次填充。',
     'reviewWorkbench.addField': '新增字段',
     'reviewWorkbench.fieldName': '字段名称',
-    'reviewWorkbench.fieldOptionsHint': '按回车添加可选项（生成时会随机抽取一个填充）',
+    'reviewWorkbench.fieldOptionsHint': '按回车添加可选项（生成时会按顺序依次填充）',
     'reviewWorkbench.addOption': '添加选项',
     'reviewWorkbench.inputSku': '输入 SKU',
     'reviewWorkbench.tone': '风格',
@@ -1745,10 +1745,10 @@ const I18N = {
     'reviewWorkbench.emptyCompetitor': 'No competitor reviews',
     'reviewWorkbench.site': 'Site',
     'reviewWorkbench.reviewText': 'Review Text',
-    'reviewWorkbench.templateHint': 'Configure the fields of your review template. After generating reviews, the system will fill the table automatically and you can export Excel/CSV. Fields with options will be filled randomly.',
+    'reviewWorkbench.templateHint': 'Configure the fields of your review template. After generating reviews, the system will fill the table automatically and you can export Excel/CSV. Fields with options will be filled sequentially.',
     'reviewWorkbench.addField': 'Add Field',
     'reviewWorkbench.fieldName': 'Field name',
-    'reviewWorkbench.fieldOptionsHint': 'Press Enter to add options (one will be picked randomly during generation)',
+    'reviewWorkbench.fieldOptionsHint': 'Press Enter to add options (filled sequentially during generation)',
     'reviewWorkbench.addOption': 'Add option',
     'reviewWorkbench.inputSku': 'Enter SKU',
     'reviewWorkbench.tone': 'Tone',
@@ -3488,7 +3488,7 @@ const app = createApp({
       const gen = this.reviewWorkbench.gen;
       const fields = this.reviewWorkbench.templateFields;
       const siteLabel = this.siteLabel(gen.site);
-      this.reviewWorkbench.rows = gen.reviews.map(review => {
+      this.reviewWorkbench.rows = gen.reviews.map((review, idx) => {
         const row = {};
         fields.forEach(f => {
           const key = String(f.name || f).trim();
@@ -3497,7 +3497,7 @@ const app = createApp({
           if (lower === 'sku' || key === 'SKU') row[key] = gen.sku;
           else if (lower === 'site' || key === '站点' || key === '站點') row[key] = siteLabel;
           else if (lower === 'review' || lower === 'review_text' || key === '评论内容' || key === '评论' || key === '評論內容') row[key] = review;
-          else if (opts.length > 0) row[key] = opts[Math.floor(Math.random() * opts.length)];
+          else if (opts.length > 0) row[key] = opts[idx % opts.length];
           else row[key] = '';
         });
         return row;
