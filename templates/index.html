@@ -293,7 +293,7 @@
         </div>
       </div>
       <div class="sidebar-footer">
-        <div>v3.4.1 | AI Knowledge Base + Review Generator</div>
+        <div>v3.4.2 | AI Knowledge Base + Review Generator</div>
         <div style="margin-top:4px">Powered by Flask + Vue 3</div>
       </div>
     </div>
@@ -715,7 +715,7 @@
               <div>
                 <el-button type="primary" @click="openKbTextDialog()"><i class="fas fa-plus" style="margin-right:4px;"></i>{{ t('aiKb.addText') }}</el-button>
                 <el-button @click="$refs.kbFileInput.click()"><i class="fas fa-file-arrow-up" style="margin-right:4px;"></i>{{ t('aiKb.uploadDoc') }}</el-button>
-                <input type="file" ref="kbFileInput" accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none" @change="handleKbFileUpload">
+                <input type="file" ref="kbFileInput" multiple accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none" @change="handleKbFileUpload">
               </div>
             </div>
             <div class="card-body">
@@ -751,6 +751,9 @@
               <div v-if="kbChat.answer" class="ai-answer-box" style="background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;padding:16px;line-height:1.7;white-space:pre-wrap;">
                 <div style="font-weight:600;color:#389e0d;margin-bottom:8px;"><i class="fas fa-robot" style="margin-right:6px;"></i>{{ t('aiKb.answer') }}</div>
                 <div>{{ kbChat.answer }}</div>
+                <div v-if="kbChat.sources && kbChat.sources.length" style="margin-top:12px;padding-top:12px;border-top:1px dashed #b7eb8f;font-size:12px;color:#595959;">
+                  <i class="fas fa-book-open" style="margin-right:4px;"></i>{{ t('aiKb.sources') }}：{{ kbChat.sources.join('、') }}
+                </div>
               </div>
             </div>
           </div>
@@ -1380,6 +1383,7 @@ const I18N = {
     'aiKb.questionPlaceholder': '输入你的问题，例如：这款键盘的续航多久？',
     'aiKb.askBtn': '提问',
     'aiKb.answer': 'AI 回答',
+    'aiKb.sources': '参考来源',
     'aiKb.newDoc': '新增知识',
     'aiKb.editDoc': '编辑知识',
     'aiKb.titlePlaceholder': '例如：K530 机械键盘产品手册',
@@ -1693,6 +1697,7 @@ const I18N = {
     'aiKb.questionPlaceholder': 'Ask a question, e.g. How long is the battery life?',
     'aiKb.askBtn': 'Ask',
     'aiKb.answer': 'AI Answer',
+    'aiKb.sources': 'Sources',
     'aiKb.newDoc': 'New Document',
     'aiKb.editDoc': 'Edit Document',
     'aiKb.titlePlaceholder': 'e.g. K530 Mechanical Keyboard Manual',
@@ -2065,7 +2070,7 @@ const app = createApp({
 
       aiConfigured: false,
       kbDocuments: [],
-      kbChat: { product_model: '', question: '', answer: '', loading: false },
+      kbChat: { product_model: '', question: '', answer: '', sources: [], loading: false },
       kbDialog: { visible: false, editing: false },
       kbForm: { id: null, title: '', content: '' },
       reviewGen: { product_model: '', site: 'my', competitor_review: '', selling_points: '', tone: 'positive', count: 3, loading: false, reviews: [] },
@@ -3251,18 +3256,22 @@ const app = createApp({
       }
     },
     async handleKbFileUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('title', file.name);
-      formData.append('doc_type', 'file');
+      files.forEach(file => formData.append('files', file));
       this.loading = true;
       try {
-        const res = await fetch('/api/v1/kb/documents', { method: 'POST', body: formData });
+        const res = await fetch('/api/v1/kb/documents/batch', { method: 'POST', body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'upload failed');
-        ElementPlus.ElMessage.success(this.t('aiKb.uploadSuccess'));
+        const uploaded = data.uploaded || 0;
+        const failed = (data.failed || []).length;
+        if (failed > 0) {
+          ElementPlus.ElMessage.warning(`上传完成：成功 ${uploaded} 个，失败 ${failed} 个`);
+        } else {
+          ElementPlus.ElMessage.success(`成功上传 ${uploaded} 个文档`);
+        }
         this.loadKbDocuments();
       } catch(e) {
         ElementPlus.ElMessage.error(e.message || this.t('aiKb.uploadFail'));
@@ -3277,6 +3286,7 @@ const app = createApp({
       }
       this.kbChat.loading = true;
       this.kbChat.answer = '';
+      this.kbChat.sources = [];
       try {
         const res = await fetch('/api/v1/ai/chat', {
           method: 'POST',
@@ -3289,6 +3299,7 @@ const app = createApp({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'AI request failed');
         this.kbChat.answer = data.answer || '';
+        this.kbChat.sources = data.sources || [];
       } catch(e) {
         ElementPlus.ElMessage.error(e.message || this.t('msg.networkError'));
       }

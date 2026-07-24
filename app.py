@@ -1528,15 +1528,15 @@ def _index_document(db, doc_id, content):
 
 
 def _search_kb(db, query, product_model=None, top_k=5):
-    """Full-text search over knowledge base chunks."""
+    """Full-text search over knowledge base chunks, with ILIKE fallback for low-recall terms."""
     if not query:
         return []
     search_terms = query.strip()
     if product_model:
         search_terms = f"{product_model} {search_terms}"
-    # Use plainto_tsquery for safe parsing
+    # Primary: full-text search using simple tsvector
     rows = db.execute(
-        """SELECT c.id, c.document_id, c.chunk_index, c.content,
+        """SELECT c.id, c.document_id, c.chunk_index, c.content, d.title,
                   ts_rank_cd(c.search_vector, plainto_tsquery('simple', %s), 32) AS rank
            FROM kb_chunks c
            JOIN kb_documents d ON d.id = c.document_id
@@ -1546,7 +1546,23 @@ def _search_kb(db, query, product_model=None, top_k=5):
            LIMIT %s""",
         (search_terms, search_terms, top_k)
     ).fetchall()
-    return rows_to_dicts(rows)
+    results = rows_to_dicts(rows)
+    # Fallback: if full-text search returns nothing, try substring matching
+    if not results:
+        like_pattern = f"%{query.strip()}%"
+        model_pattern = f"%{product_model.strip()}%" if product_model else like_pattern
+        rows = db.execute(
+            """SELECT c.id, c.document_id, c.chunk_index, c.content, d.title, 0 AS rank
+               FROM kb_chunks c
+               JOIN kb_documents d ON d.id = c.document_id
+               WHERE d.is_deleted = 0
+                 AND (c.content ILIKE %s OR d.title ILIKE %s OR (c.content ILIKE %s AND %s <> ''))
+               ORDER BY c.id DESC
+               LIMIT %s""",
+            (like_pattern, like_pattern, model_pattern, product_model or '', top_k)
+        ).fetchall()
+        results = rows_to_dicts(rows)
+    return results
 
 
 def _format_kb_context(chunks):
@@ -1554,7 +1570,8 @@ def _format_kb_context(chunks):
         return ''
     parts = []
     for i, ch in enumerate(chunks, 1):
-        parts.append(f"[片段 {i}]\n{ch['content']}")
+        title = ch.get('title') or f"片段 {i}"
+        parts.append(f"[来源：{title}]\n{ch['content']}")
     return '\n\n'.join(parts)
 
 
@@ -1607,6 +1624,50 @@ def create_kb_document():
     db.commit()
     db.close()
     return jsonify({'id': doc_id, 'title': title, 'message': 'Document uploaded successfully'})
+
+
+def _process_kb_file(file, db):
+    """Save and index a single knowledge base file. Returns (doc_id, title) or raises exception."""
+    if not file or not file.filename:
+        raise ValueError('No file provided')
+    if not _allowed_kb_filename(file.filename):
+        raise ValueError(f'Unsupported file type: {file.filename}')
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"kb_{uuid.uuid4().hex}.{ext}"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(file_path)
+    doc_type = ext if ext in ALLOWED_KB_EXTENSIONS else 'text'
+    content = _extract_text_from_file(file_path, file.filename)
+    if not content:
+        raise ValueError(f'No content extracted from {file.filename}')
+    db.execute(
+        "INSERT INTO kb_documents (title, doc_type, content, file_path) VALUES (%s, %s, %s, %s) RETURNING id",
+        (file.filename, doc_type, content, file_path)
+    )
+    doc_id = db.cur.fetchone()['id']
+    _index_document(db, doc_id, content)
+    return doc_id, file.filename
+
+
+@app.route('/api/v1/kb/documents/batch', methods=['POST'])
+def create_kb_documents_batch():
+    db = get_db()
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({'error': 'No files provided'}), 400
+
+    uploaded = []
+    failed = []
+    for file in files:
+        try:
+            doc_id, title = _process_kb_file(file, db)
+            uploaded.append({'id': doc_id, 'title': title})
+        except Exception as e:
+            failed.append({'filename': file.filename if file else '', 'error': str(e)})
+
+    db.commit()
+    db.close()
+    return jsonify({'uploaded': uploaded, 'failed': failed, 'count': len(uploaded)})
 
 
 @app.route('/api/v1/kb/documents/<int:doc_id>', methods=['PUT'])
@@ -1665,24 +1726,35 @@ def ai_chat_endpoint():
 
     db = get_db()
     try:
-        chunks = _search_kb(db, question, product_model, top_k=5)
+        chunks = _search_kb(db, question, product_model, top_k=8)
         context = _format_kb_context(chunks)
 
         system_prompt = (
-            "你是一个专业的产品知识库助手。请根据下面提供的产品知识片段，回答用户关于产品的问题。"
-            "如果知识片段中没有足够信息，请明确说明。回答要简洁、专业、分点清晰。"
+            "你是一位严谨的产品知识库助手。你的任务是根据下面「参考资料」中的内容回答用户问题。"
+            "必须遵守以下规则：\n"
+            "1. 只使用参考资料中明确包含的信息作答，不要编造、推测或引入外部知识。\n"
+            "2. 如果参考资料中没有足够信息，明确回答：「根据现有知识库，暂时无法找到该问题的答案。」\n"
+            "3. 回答要简洁、准确、专业，优先使用中文回答。\n"
+            "4. 如果问题涉及型号、规格、功能等具体信息，请直接给出结论并注明依据。"
         )
-        user_prompt = f"产品型号：{product_model}\n\n"
+        user_prompt = f"产品型号：{product_model or '未指定'}\n\n"
         if context:
             user_prompt += f"参考资料：\n{context}\n\n"
-        user_prompt += f"问题：{question}"
+        else:
+            user_prompt += "参考资料：无\n\n"
+        user_prompt += f"问题：{question}\n\n请严格依据参考资料作答。"
 
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
         ]
-        answer = ai_chat(messages, temperature=0.5)
-        return jsonify({'answer': answer, 'chunks_used': len(chunks)})
+        answer = ai_chat(messages, temperature=0.3)
+        sources = []
+        for ch in chunks:
+            title = ch.get('title')
+            if title and title not in sources:
+                sources.append(title)
+        return jsonify({'answer': answer, 'chunks_used': len(chunks), 'sources': sources})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -1794,7 +1866,7 @@ init_db()
 migrate_db()
 migrate_order_line_items()
 print("=" * 50)
-print("  Review Reconciliation System v3.4.1 (PostgreSQL + AI)")
+print("  Review Reconciliation System v3.4.2 (PostgreSQL + AI)")
 print("  Database: Supabase PostgreSQL")
 print("  Upload dir:", UPLOAD_DIR)
 print("  Currencies:", len(CURRENCIES))
