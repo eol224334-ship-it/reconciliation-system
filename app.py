@@ -806,6 +806,14 @@ def create_ledger():
     data = request.json
     db = get_db()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    currency = data.get('currency', 'IDR')
+    exchange_rate = float(data.get('exchange_rate', 0.000460))
+    if currency == 'CNY':
+        exchange_rate = 1.0
+    commission_currency = data.get('commission_currency') or currency
+    commission_exchange_rate = float(data.get('commission_exchange_rate', data.get('exchange_rate', 0.000460)))
+    if commission_currency == 'CNY':
+        commission_exchange_rate = 1.0
     cur = db.execute(
         """INSERT INTO evaluation_expense_ledger
            (customer_name, company_name, payment_item, order_fee, commission, customer_paid,
@@ -841,10 +849,10 @@ def create_ledger():
             float(data.get('fo_paid', 0)),
             data.get('fo_payment_time'),
             data.get('fo_proof_url'),
-            data.get('currency', 'IDR'),
-            float(data.get('exchange_rate', 0.000460)),
-            data.get('commission_currency') or data.get('currency', 'IDR'),
-            float(data.get('commission_exchange_rate', data.get('exchange_rate', 0.000460))),
+            currency,
+            exchange_rate,
+            commission_currency,
+            commission_exchange_rate,
             data.get('remark', ''),
             'admin',
             now,
@@ -874,7 +882,11 @@ def get_ledger(ledger_id):
 
 @app.route('/api/v1/ledgers/<int:ledger_id>', methods=['PUT'])
 def update_ledger(ledger_id):
-    data = request.json
+    data = dict(request.json or {})
+    if data.get('currency') == 'CNY':
+        data['exchange_rate'] = 1.0
+    if data.get('commission_currency') == 'CNY':
+        data['commission_exchange_rate'] = 1.0
     db = get_db()
     old = db.execute('SELECT * FROM evaluation_expense_ledger WHERE id = %s AND is_deleted = 0', (ledger_id,)).fetchone()
     if not old:

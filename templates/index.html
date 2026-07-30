@@ -1101,7 +1101,7 @@
           <el-input-number v-model="form.order_fee" :precision="2" :step="100000" :min="0" style="width:100%" :controls="true"></el-input-number>
         </el-form-item>
         <el-form-item :label="t('form.orderFeeCurrency')" style="flex:1;">
-          <el-select v-model="form.currency" style="width:100%" filterable>
+          <el-select v-model="form.currency" style="width:100%" filterable @change="onCurrencyChange">
             <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
           </el-select>
         </el-form-item>
@@ -1114,7 +1114,7 @@
           <el-input-number v-model="form.commission" :precision="2" :step="10000" :min="0" style="width:100%" :controls="true"></el-input-number>
         </el-form-item>
         <el-form-item :label="t('form.commissionCurrency')" style="flex:1;">
-          <el-select v-model="form.commission_currency" style="width:100%" filterable>
+          <el-select v-model="form.commission_currency" style="width:100%" filterable @change="onCommissionCurrencyChange">
             <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
           </el-select>
         </el-form-item>
@@ -2905,8 +2905,57 @@ const app = createApp({
       ElementPlus.ElMessage.success(this.t('orders.exportSuccess'));
     },
 
-    async onCurrencyChange(currency) {
-      // 汇率管理已移除，保留手动编辑；不再自动从系统汇率表填充
+    getDefaultLedgerRate(currency) {
+      const rates = {
+        CNY: 1,
+        IDR: 0.000460,
+        USD: 7.25,
+        EUR: 7.85,
+        GBP: 9.25,
+        JPY: 0.047,
+        KRW: 0.0052,
+        HKD: 0.92,
+        TWD: 0.22,
+        SGD: 5.35,
+        MYR: 1.55,
+        THB: 0.20,
+        PHP: 0.125,
+        VND: 0.00029,
+        BRL: 1.25,
+        MXN: 0.39,
+        COP: 0.0017,
+        CLP: 0.0075,
+        PLN: 1.8,
+        TRY: 0.21,
+        AED: 1.97,
+        CAD: 5.25,
+        AUD: 4.75,
+        NZD: 4.25,
+        INR: 0.087,
+        RUB: 0.079
+      };
+      return rates[currency] || 0.000460;
+    },
+
+    normalizeLedgerRates() {
+      if (this.form.currency === 'CNY') {
+        this.form.exchange_rate = 1;
+      } else if (!this.form.exchange_rate || this.form.exchange_rate === 0) {
+        this.form.exchange_rate = this.getDefaultLedgerRate(this.form.currency);
+      }
+      if (this.form.commission_currency === 'CNY') {
+        this.form.commission_exchange_rate = 1;
+      } else if (!this.form.commission_exchange_rate || this.form.commission_exchange_rate === 0) {
+        this.form.commission_exchange_rate = this.getDefaultLedgerRate(this.form.commission_currency);
+      }
+    },
+
+    onCurrencyChange(currency) {
+      this.form.exchange_rate = this.getDefaultLedgerRate(currency);
+    },
+
+    onCommissionCurrencyChange(currency) {
+      this.form.commission_exchange_rate = this.getDefaultLedgerRate(currency);
     },
 
     openCreate() {
@@ -2920,6 +2969,7 @@ const app = createApp({
         this.form = { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, commission_currency: 'IDR', commission_exchange_rate: 0.000460, remark: '', attachment_url: '' };
         this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
       }
+      this.normalizeLedgerRates();
       this.isRestoringDraft = false;
       this.dialogVisible = true;
     },
@@ -2938,6 +2988,7 @@ const app = createApp({
           commission_proof_url: row.commission_proof_url || ''
         };
       }
+      this.normalizeLedgerRates();
       this.isRestoringDraft = false;
       this.dialogVisible = true;
     },
