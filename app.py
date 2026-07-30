@@ -197,7 +197,9 @@ def init_db():
             reconciliation_status TEXT NOT NULL DEFAULT 'open',
             currency TEXT NOT NULL DEFAULT 'IDR',
             exchange_rate DOUBLE PRECISION NOT NULL DEFAULT 0.000460,
-            total_cost_cny DOUBLE PRECISION GENERATED ALWAYS AS ((order_fee + commission) * exchange_rate) STORED,
+            commission_currency TEXT NOT NULL DEFAULT 'IDR',
+            commission_exchange_rate DOUBLE PRECISION NOT NULL DEFAULT 0.000460,
+            total_cost_cny DOUBLE PRECISION GENERATED ALWAYS AS (order_fee * exchange_rate + commission * commission_exchange_rate) STORED,
             remark TEXT,
             is_deleted INTEGER NOT NULL DEFAULT 0,
             deleted_at TEXT,
@@ -357,6 +359,31 @@ def migrate_db():
             db.execute(f'ALTER TABLE evaluation_expense_ledger ADD COLUMN {col_name} {col_def}')
             print(f"  [migration] Added column: {col_name}")
 
+    # Add per-field currency/rate for commission (货值/佣金可独立设置币种)
+    if 'commission_currency' not in col_names:
+        db.execute("ALTER TABLE evaluation_expense_ledger ADD COLUMN commission_currency TEXT NOT NULL DEFAULT 'IDR'")
+        print("  [migration] Added column: commission_currency")
+    if 'commission_exchange_rate' not in col_names:
+        db.execute("ALTER TABLE evaluation_expense_ledger ADD COLUMN commission_exchange_rate DOUBLE PRECISION NOT NULL DEFAULT 0.000460")
+        print("  [migration] Added column: commission_exchange_rate")
+
+    # Backfill existing rows: commission currency/rate default to the main currency/rate
+    # so historical total_cost_cny stays unchanged.
+    db.execute(
+        "UPDATE evaluation_expense_ledger SET commission_currency = currency, commission_exchange_rate = exchange_rate "
+        "WHERE commission_currency IS NULL OR commission_currency = '' OR commission_exchange_rate IS NULL OR commission_exchange_rate = 0"
+    )
+
+    # Recreate total_cost_cny to sum both currencies into CNY.
+    if 'total_cost_cny' in col_names:
+        db.execute("ALTER TABLE evaluation_expense_ledger DROP COLUMN total_cost_cny")
+        print("  [migration] Dropped old total_cost_cny")
+    db.execute(
+        "ALTER TABLE evaluation_expense_ledger ADD COLUMN total_cost_cny DOUBLE PRECISION "
+        "GENERATED ALWAYS AS (order_fee * exchange_rate + commission * commission_exchange_rate) STORED"
+    )
+    print("  [migration] Recreated total_cost_cny with split-currency formula")
+
     db.commit()
     db.close()
 
@@ -515,6 +542,8 @@ def enrich_ledger(row):
     cur = d.get('currency', 'IDR')
     d['currency_symbol'] = CURRENCIES.get(cur, {}).get('symbol', '')
     d['currency_name'] = CURRENCIES.get(cur, {}).get('name', cur)
+    d['commission_currency'] = d.get('commission_currency') or cur
+    d['commission_exchange_rate'] = d.get('commission_exchange_rate') or d.get('exchange_rate') or 0.000460
     d['product_payment_currency'] = d.get('product_payment_currency') or cur
     d['commission_payment_currency'] = d.get('commission_payment_currency') or cur
     d['commission_payment_rate'] = d.get('commission_payment_rate') or d.get('exchange_rate') or 0.000460
@@ -708,7 +737,11 @@ def push_summary_to_feishu(db):
     total_receivable = sum(r['customer_unpaid'] for r in rows)
     total_payable = sum((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid']) for r in rows)
     total_receivable_cny = sum(r['customer_unpaid'] * r['exchange_rate'] for r in rows)
-    total_payable_cny = sum(((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate'] for r in rows)
+    total_payable_cny = sum(
+        (r['order_fee'] - r['product_paid']) * r['exchange_rate'] +
+        (r['commission'] - r['commission_paid']) * (r.get('commission_exchange_rate') or r['exchange_rate'])
+        for r in rows
+    )
     currency_map = {}
     for r in rows:
         cur = r['currency']
@@ -781,8 +814,8 @@ def create_ledger():
             commission_paid, commission_payment_time, commission_proof_url, commission_payment_currency,
             commission_payment_rate, product_payment_rate, order_details, attachment_url,
             fo_paid, fo_payment_time, fo_proof_url,
-            currency, exchange_rate, remark, created_by, updated_at, created_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            currency, exchange_rate, commission_currency, commission_exchange_rate, remark, created_by, updated_at, created_at)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING id""",
         (
             data.get('customer_name', ''),
@@ -810,6 +843,8 @@ def create_ledger():
             data.get('fo_proof_url'),
             data.get('currency', 'IDR'),
             float(data.get('exchange_rate', 0.000460)),
+            data.get('commission_currency') or data.get('currency', 'IDR'),
+            float(data.get('commission_exchange_rate', data.get('exchange_rate', 0.000460))),
             data.get('remark', ''),
             'admin',
             now,
@@ -853,7 +888,7 @@ def update_ledger(ledger_id):
         'commission_paid', 'commission_payment_time', 'commission_proof_url', 'commission_payment_currency', 'commission_payment_rate',
         'order_details', 'attachment_url',
         'fo_paid', 'fo_payment_time', 'fo_proof_url',
-        'currency', 'exchange_rate', 'remark'
+        'currency', 'exchange_rate', 'commission_currency', 'commission_exchange_rate', 'remark'
     ]
     updates = []
     params = []
@@ -1337,7 +1372,11 @@ def dashboard_summary():
     total_receivable = sum(r['customer_unpaid'] for r in rows)
     total_payable = sum((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid']) for r in rows)
     total_receivable_cny = sum(r['customer_unpaid'] * r['exchange_rate'] for r in rows)
-    total_payable_cny = sum(((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate'] for r in rows)
+    total_payable_cny = sum(
+        (r['order_fee'] - r['product_paid']) * r['exchange_rate'] +
+        (r['commission'] - r['commission_paid']) * (r.get('commission_exchange_rate') or r['exchange_rate'])
+        for r in rows
+    )
     today = date.today().isoformat()
     overdue_ar = sum(r['customer_unpaid'] for r in rows if r['collection_date'] and r['collection_date'] < today and r['ar_status'] != 'settled')
     ar_counts = {
@@ -1370,11 +1409,12 @@ def dashboard_summary():
                 'symbol': CURRENCIES.get(cur, {}).get('symbol', ''),
                 'name': CURRENCIES.get(cur, {}).get('name', cur),
             }
+        commission_rate = r.get('commission_exchange_rate') or r['exchange_rate']
         currency_breakdown[cur]['count'] += 1
         currency_breakdown[cur]['receivable'] += r['customer_unpaid']
         currency_breakdown[cur]['payable'] += (r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])
         currency_breakdown[cur]['receivable_cny'] += r['customer_unpaid'] * r['exchange_rate']
-        currency_breakdown[cur]['payable_cny'] += ((r['order_fee'] - r['product_paid']) + (r['commission'] - r['commission_paid'])) * r['exchange_rate']
+        currency_breakdown[cur]['payable_cny'] += (r['order_fee'] - r['product_paid']) * r['exchange_rate'] + (r['commission'] - r['commission_paid']) * commission_rate
     db.close()
     return jsonify({
         'total_receivable': round(total_receivable, 2),

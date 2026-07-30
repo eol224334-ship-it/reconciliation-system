@@ -523,16 +523,17 @@
                     <el-tag size="small" effect="plain">{{ row.payment_item }}</el-tag>
                   </template>
                   <template v-else-if="col.key === 'order_fee'">
-                    <span class="amount">{{ fmt(row.order_fee) }}</span>
+                    <span class="amount">{{ fmt(row.order_fee) }}</span><span class="cur-tag">{{ row.currency }}</span>
                   </template>
                   <template v-else-if="col.key === 'commission'">
-                    <span class="amount purple">{{ fmt(row.commission) }}</span>
+                    <span class="amount purple">{{ fmt(row.commission) }}</span><span class="cur-tag">{{ row.commission_currency || row.currency }}</span>
                   </template>
                   <template v-else-if="col.key === 'total_cost'">
-                    <span class="amount total">{{ fmt(row.total_cost) }}</span>
+                    <span class="amount total">&yen;{{ fmt(row.total_cost_cny, 2) }}</span>
                   </template>
                   <template v-else-if="col.key === 'currency'">
                     <span class="cur-tag" style="font-size:11px;padding:2px 6px;">{{ row.currency }}</span>
+                    <span v-if="row.commission_currency && row.commission_currency !== row.currency" class="cur-tag" style="font-size:11px;padding:2px 6px;margin-left:2px;background:#e6f7ff;color:#1677ff;">{{ row.commission_currency }}</span>
                   </template>
                   <template v-else-if="col.key === 'customer_paid'">
                     <span class="amount pos">{{ fmt(row.customer_paid) }}</span>
@@ -1090,40 +1091,53 @@
           <template #prefix><i class="fas fa-building" style="color:#c0c4cc;"></i></template>
         </el-input>
       </el-form-item>
-      <div style="display:flex;gap:12px;">
-        <el-form-item :label="t('form.currency')" style="flex:1;">
-          <el-select v-model="form.currency" style="width:100%" filterable @change="onCurrencyChange">
+      <el-form-item :label="t('form.paymentItem')">
+        <el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option :placeholder="t('form.paymentItemPlaceholder')">
+          <el-option v-for="item in paymentItemOptions" :key="item" :label="item" :value="item"></el-option>
+        </el-select>
+      </el-form-item>
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <el-form-item :label="t('form.orderFee')" style="flex:1.2;">
+          <el-input-number v-model="form.order_fee" :precision="2" :step="100000" :min="0" style="width:100%" :controls="true"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="t('form.orderFeeCurrency')" style="flex:1;">
+          <el-select v-model="form.currency" style="width:100%" filterable>
             <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('form.paymentItem')" style="flex:1;">
-          <el-select v-model="form.payment_item" style="width:100%" filterable allow-create default-first-option :placeholder="t('form.paymentItemPlaceholder')">
-            <el-option v-for="item in paymentItemOptions" :key="item" :label="item" :value="item"></el-option>
-          </el-select>
+        <el-form-item :label="t('form.orderFeeRate')" style="flex:1;">
+          <el-input-number v-model="form.exchange_rate" :precision="6" :step="0.0001" :min="0" style="width:100%" :controls="false"></el-input-number>
         </el-form-item>
       </div>
-      <div style="display:flex;gap:12px;">
-        <el-form-item :label="t('form.orderFee')" style="flex:1;">
-          <el-input-number v-model="form.order_fee" :precision="2" :step="100000" :min="0" style="width:100%" :controls="true"></el-input-number>
-        </el-form-item>
-        <el-form-item :label="t('form.commission')" style="flex:1;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <el-form-item :label="t('form.commission')" style="flex:1.2;">
           <el-input-number v-model="form.commission" :precision="2" :step="10000" :min="0" style="width:100%" :controls="true"></el-input-number>
         </el-form-item>
+        <el-form-item :label="t('form.commissionCurrency')" style="flex:1;">
+          <el-select v-model="form.commission_currency" style="width:100%" filterable>
+            <el-option v-for="(info, code) in currencyOptions" :key="code" :label="code + ' ' + info.name" :value="code"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('form.commissionRate')" style="flex:1;">
+          <el-input-number v-model="form.commission_exchange_rate" :precision="6" :step="0.0001" :min="0" style="width:100%" :controls="false"></el-input-number>
+        </el-form-item>
       </div>
-      <el-form-item :label="t('form.exchangeRate') + ' (' + form.currency + ' to CNY)'">
-        <el-input-number v-model="form.exchange_rate" :precision="6" :step="0.0001" :min="0" style="width:100%" :controls="false"></el-input-number>
-      </el-form-item>
       <el-form-item :label="t('form.remark')">
         <el-input v-model="form.remark" type="textarea" :rows="2" :placeholder="t('form.remarkPlaceholder')"></el-input>
       </el-form-item>
       <el-form-item :label="t('form.totalPreview')">
-        <div style="background:#f0f5ff;border:1px solid #adc6ff;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <span style="font-size:22px;font-weight:700;color:var(--color-primary);">{{ fmt((form.order_fee||0) + (form.commission||0)) }}</span>
-            <span style="font-size:12px;color:var(--text-secondary);margin-left:8px;">{{ form.currency || 'IDR' }}</span>
+        <div style="background:#f0f5ff;border:1px solid #adc6ff;border-radius:8px;padding:12px 16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-secondary);">{{ t('form.orderFee') }} ({{ form.currency || 'IDR' }})</span>
+            <span style="font-weight:600;">{{ fmt(form.order_fee||0) }} &asymp; &yen;{{ fmt((form.order_fee||0)*(form.exchange_rate||0), 2) }}</span>
           </div>
-          <div style="font-size:14px;color:var(--text-secondary);">
-            &asymp; &yen; {{ fmt(((form.order_fee||0)+(form.commission||0))*(form.exchange_rate||0.000460), 2) }} CNY
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-secondary);">{{ t('form.commission') }} ({{ form.commission_currency || 'IDR' }})</span>
+            <span style="font-weight:600;">{{ fmt(form.commission||0) }} &asymp; &yen;{{ fmt((form.commission||0)*(form.commission_exchange_rate||0), 2) }}</span>
+          </div>
+          <div style="border-top:1px solid #adc6ff;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:14px;color:var(--text-secondary);">{{ t('form.totalCostCny') }}</span>
+            <span style="font-size:22px;font-weight:700;color:var(--color-primary);">&yen; {{ fmt(((form.order_fee||0)*(form.exchange_rate||0) + (form.commission||0)*(form.commission_exchange_rate||0)), 2) }}</span>
           </div>
         </div>
       </el-form-item>
@@ -1212,7 +1226,7 @@
   <el-dialog :title="paymentEditMode ? t('dialog.editReceive') : t('dialog.customerPayment')" v-model="paymentDialogVisible" width="500px" :close-on-click-modal="false">
     <div v-if="currentLedger" class="dialog-info-box">
       <div class="row"><span>{{ t('pay.customer') }}</span><b>{{ currentLedger.customer_name }}</b></div>
-      <div class="row"><span>{{ t('pay.totalCost') }}</span><b>{{ fmt(currentLedger.total_cost) }} {{ currentLedger.currency }}</b></div>
+      <div class="row"><span>{{ t('pay.totalCost') }}</span><b>&yen;{{ fmt(currentLedger.total_cost_cny, 2) }}</b></div>
       <div class="row"><span>{{ t('pay.paid') }}</span><b style="color:var(--color-success);">{{ fmt(currentLedger.customer_paid) }}</b> <span style="color:var(--text-light);">|</span> <span>{{ t('pay.unpaid') }}</span><b style="color:var(--color-danger);">{{ fmt(currentLedger.customer_unpaid) }}</b></div>
     </div>
     <el-form :model="payment" label-width="100px">
@@ -1547,7 +1561,7 @@ const I18N = {
     'col.payment_item': '付款项目',
     'col.order_fee': '货值',
     'col.commission': '佣金',
-    'col.total_cost': '总费用',
+    'col.total_cost': '总费用(CNY)',
     'col.customer_paid': '客户已付',
     'col.customer_unpaid': '客户未付',
     'col.ar_status': 'AR状态',
@@ -1629,6 +1643,11 @@ const I18N = {
     'form.paymentItemPlaceholder': '请选择或输入新项目',
     'form.orderFee': '货值',
     'form.commission': '佣金',
+    'form.orderFeeCurrency': '货值币种',
+    'form.orderFeeRate': '货值汇率',
+    'form.commissionCurrency': '佣金币种',
+    'form.commissionRate': '佣金汇率',
+    'form.totalCostCny': '总费用（人民币）',
     'form.exchangeRate': '汇率',
     'form.remark': '备注',
     'form.remarkPlaceholder': '可选备注信息',
@@ -1870,7 +1889,7 @@ const I18N = {
     'col.payment_item': 'Item',
     'col.order_fee': 'Product Value',
     'col.commission': 'Commission',
-    'col.total_cost': 'Total Cost',
+    'col.total_cost': 'Total Cost (CNY)',
     'col.customer_paid': 'Cust. Paid',
     'col.customer_unpaid': 'Cust. Unpaid',
     'col.ar_status': 'AR Status',
@@ -1952,6 +1971,11 @@ const I18N = {
     'form.paymentItemPlaceholder': 'Select or enter new item',
     'form.orderFee': 'Product Value',
     'form.commission': 'Commission',
+    'form.orderFeeCurrency': 'Product Currency',
+    'form.orderFeeRate': 'Product Rate',
+    'form.commissionCurrency': 'Commission Currency',
+    'form.commissionRate': 'Commission Rate',
+    'form.totalCostCny': 'Total Cost (CNY)',
     'form.exchangeRate': 'Rate',
     'form.remark': 'Remark',
     'form.remarkPlaceholder': 'Optional remark',
@@ -2101,7 +2125,7 @@ const app = createApp({
 
       dialogVisible: false,
       editing: false,
-      form: { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '', attachment_url: '' },
+      form: { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, commission_currency: 'IDR', commission_exchange_rate: 0.000460, remark: '', attachment_url: '' },
       editProofs: { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' },
 
       paymentDialogVisible: false,
@@ -2893,7 +2917,7 @@ const app = createApp({
         this.form = draft.form;
         this.editProofs = draft.editProofs || { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
       } else {
-        this.form = { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, remark: '', attachment_url: '' };
+        this.form = { customer_name: '', company_name: '', payment_item: 'FO-PLAN', order_fee: 0, commission: 0, currency: 'IDR', exchange_rate: 0.000460, commission_currency: 'IDR', commission_exchange_rate: 0.000460, remark: '', attachment_url: '' };
         this.editProofs = { customer_proof_url: '', product_proof_url: '', commission_proof_url: '' };
       }
       this.isRestoringDraft = false;
@@ -2931,6 +2955,8 @@ const app = createApp({
         commission: this.form.commission || 0,
         currency: this.form.currency || 'IDR',
         exchange_rate: this.form.exchange_rate || 0.000460,
+        commission_currency: this.form.commission_currency || this.form.currency || 'IDR',
+        commission_exchange_rate: this.form.commission_exchange_rate || this.form.exchange_rate || 0.000460,
         remark: this.form.remark || '',
         attachment_url: this.form.attachment_url || '',
         customer_proof_url: this.editProofs.customer_proof_url || '',
